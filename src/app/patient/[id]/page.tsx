@@ -22,21 +22,19 @@ export default function PatientPage({ params }: PatientPageProps) {
   // Page is loading while patient data is being fetched.
   const [loading, setLoading] = useState(true);
   
-  // Fetch patients from JSON file
   useEffect(() => {
-    fetch("/api/patients")
-      .then((res) => res.json())
+    fetch(`/api/patients/${id}`)
+      .then((res) => {
+        if (res.status === 404) return notFound();
+        return res.json();
+      })
       .then((data) => {
-        const patient = data.find((p: Patient) => p.id === id);
-
-        // Show 404 if patient doesn't exist.
-        if (!patient) return notFound();
-
-        setPatient(patient);
+        if (!data) return;
+        setPatient(data as Patient);
         setLoading(false);
       })
       .catch((error) => {
-        console.error("Error loading patients:", error);
+        console.error("Error loading patient:", error);
         setLoading(false);
       });
   }, [id]);
