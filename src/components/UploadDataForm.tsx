@@ -11,10 +11,9 @@ interface UploadDataFormProps {
     pastDoseData: (number|null)[];
     setShowForm: React.Dispatch<React.SetStateAction<boolean>>;
     onDataUpdated?: (newAvgOut: number[], newDoseData: (number|null)[]) => void;
-    onRequestModelUpdate?: () => void;
 }
 
-export default function UploadDataForm({ patientID, pastAvgOut, pastDoseData, setShowForm, onDataUpdated, onRequestModelUpdate, updateModelTimestamp }: UploadDataFormProps & { updateModelTimestamp: () => void }) {
+export default function UploadDataForm({ patientID, pastAvgOut, pastDoseData, setShowForm, onDataUpdated }: UploadDataFormProps) {
     // Stores uploaded CSV file data.
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -25,11 +24,9 @@ export default function UploadDataForm({ patientID, pastAvgOut, pastDoseData, se
     const [validationError, setValidationError] = useState<string | null>(null);
     const lastRowRef = useRef<HTMLDivElement>(null);
     const [isEditing, setIsEditing] = useState(false);
-    const [showUpdateModelPrompt, setShowUpdateModelPrompt] = useState(false);
     const [loading, setLoading] = useState(false);
     const [progress, setProgress] = useState(0);
     const [statusMessage, setStatusMessage] = useState("");
-    const [isUpdatingModel, setIsUpdatingModel] = useState(false);
 
     useEffect(() => {
         let interval: NodeJS.Timeout | null = null;
@@ -207,7 +204,7 @@ export default function UploadDataForm({ patientID, pastAvgOut, pastDoseData, se
             const data = await res.json();
             console.log(data);
             if (onDataUpdated) onDataUpdated(pastAvgOutState, pastDoseDataState);
-            setShowUpdateModelPrompt(true);
+            setShowForm(false);
         } catch {
             setValidationError("Failed to update data. Please try again.");
         } finally {
@@ -221,53 +218,6 @@ export default function UploadDataForm({ patientID, pastAvgOut, pastDoseData, se
 
     return (
         <>
-            {/* Modal for updating prediction model */}
-            {showUpdateModelPrompt && (
-                <div className="fixed inset-0 bg-[rgba(0,0,0,0.2)] flex items-center justify-center z-50">
-                    <div className="bg-white rounded-2xl shadow-lg p-6 max-w-md w-full text-center" onClick={e => e.stopPropagation()}>
-                        <h3 className="text-lg font-semibold mb-4">Update Prediction Model?</h3>
-                        <p className="mb-6">Do you want to update the prediction model based on the new observed data?</p>
-                        <div className="flex justify-center gap-4">
-                            <Button
-                                type="button"
-                                variant="primary"
-                                onClick={async () => {
-                                    setShowUpdateModelPrompt(false);
-                                    setIsUpdatingModel(true);
-                                    setLoading(true);
-                                    setStatusMessage("Updating prediction model...");
-                                    if (typeof onRequestModelUpdate === 'function') {
-                                        await onRequestModelUpdate();
-                                        if (updateModelTimestamp) updateModelTimestamp();
-                                    }
-                                    setLoading(false);
-                                    setStatusMessage("");
-                                    setIsUpdatingModel(false);
-                                    setShowForm(false);
-                                }}
-                                disabled={isUpdatingModel}
-                            >
-                                {isUpdatingModel ? (
-                                    <div className="w-5 h-5 border-4 border-white border-t-transparent rounded-full animate-spin" />
-                                ) : (
-                                    "Yes"
-                                )}
-                            </Button>
-                            <Button
-                                type="button"
-                                variant="outline"
-                                onClick={() => {
-                                    setShowUpdateModelPrompt(false);
-                                    setShowForm(false);
-                                }}
-                                disabled={isUpdatingModel}
-                            >
-                                No
-                            </Button>
-                        </div>
-                    </div>
-                </div>
-            )}
             <form onSubmit={uploadData} className="mb-4 space-y-6 min-w-[600px] max-w-3xl">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-4">
                     <h2 className="text-2xl font-bold">Observed Data</h2>
@@ -459,14 +409,14 @@ export default function UploadDataForm({ patientID, pastAvgOut, pastDoseData, se
                     {/* You can add info here, e.g., Max Dose or Horizon if available */}
                 </div>
                 <div className="flex flex-col items-center w-full mt-6">
-                    {(loading || isUpdatingModel) && statusMessage && (
+                    {(loading || false) && statusMessage && (
                         <div className="w-full flex justify-center z-20 mb-2">
                             <div className="max-w-lg w-full mx-auto px-6 py-3 bg-green-50 border border-green-300 rounded-lg shadow text-green-900 text-base font-semibold flex items-center justify-center text-center tracking-wide" style={{letterSpacing: '0.01em', fontSize: '1.1rem'}}>
                                 {statusMessage}
                             </div>
                         </div>
                     )}
-                    {(loading || isUpdatingModel) && (
+                    {(loading || false) && (
                         <div className="w-full h-1 bg-gray-200 rounded-b-lg overflow-hidden">
                             <div
                                 className="h-full bg-[var(--color-primary)] transition-all duration-200"

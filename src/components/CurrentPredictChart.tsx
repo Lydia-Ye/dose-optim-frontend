@@ -69,13 +69,7 @@ const options: ChartOptions<"line" | "bar"> = {
     legend: {
       labels: {
         filter: (legendItem) => {
-          // Hide legend for datasets with these labels:
-          return !["Recommended Schedule Max Outcome", 
-                   "Recommended Schedule Min Outcome", 
-                   "Manual Schedule Max Outcome",
-                   "Manual Schedule Min Outcome", 
-                   "Recommended Dose", 
-                   "Manual Schedule Dose"].includes(legendItem.text);
+          return !["Manual Schedule Max Outcome", "Manual Schedule Min Outcome", "Manual Schedule Dose"].includes(legendItem.text);
         },
         boxWidth: 16,
         padding: 12,
@@ -102,8 +96,6 @@ interface ModelPrediction {
 interface ChartProps {
   pastAvgOut: number[];
   pastDoseData: number[];
-  bayesianPrediction: ModelPrediction;
-  sgldPrediction: ModelPrediction;
   manualPrediction: ModelPrediction;
   horizon: number;
 }
@@ -111,15 +103,12 @@ interface ChartProps {
 export default function CurrentPredictChart({
   pastAvgOut,
   pastDoseData,
-  bayesianPrediction,
-  sgldPrediction,
   manualPrediction,
   horizon
 }: ChartProps) {
   if (!pastAvgOut || pastAvgOut.length === 0) {
     return <p className="mt-20 mb-80 text-center text-[var(--color-warning)]">Please upload patient data for visualization.</p>;
   }
-
 
   const lastObserved = pastAvgOut.at(-1) ?? 0;
 
@@ -143,115 +132,6 @@ export default function CurrentPredictChart({
         fill: false,
         data: pastAvgOut,
       },
-
-      // Bayesian Prediction (if exists)
-      ...(bayesianPrediction.futureAvgOut.length > 0 ? [
-        {
-          type: "line" as const,
-          label: "Recommended Schedule Prediction",
-          borderColor: "rgb(255, 170, 0)",
-          backgroundColor: "rgba(255, 170, 0, 0.1)",
-          borderWidth: 1.5,
-          borderDash: [5, 5],
-          pointRadius: 0,
-          pointHoverRadius: 4,
-          tension: 0.4,
-          yAxisID: "y-left",
-          fill: false,
-          data: [
-            ...Array(pastAvgOut.length - 1).fill(null),
-            ...bayesianPrediction.futureAvgOut
-          ],
-        },
-        {
-          type: "line" as const,
-          label: "Recommended Schedule Max Outcome",
-          backgroundColor: "rgba(255, 170, 0, 0.2)",
-          borderColor: "rgba(255, 170, 0, 0)",
-          pointRadius: 0,
-          pointHoverRadius: 0,
-          yAxisID: "y-left",
-          data: [
-            ...Array(pastAvgOut.length - 1).fill(null),
-            ...bayesianPrediction.maxOut
-          ],
-        },
-        {
-          type: "line" as const,
-          label: "Recommended Schedule Min Outcome",
-          backgroundColor: "rgba(255, 170, 0, 0.2)",
-          borderColor: "rgba(255, 170, 0, 0)",
-          pointRadius: 0,
-          pointHoverRadius: 0,
-          yAxisID: "y-left",
-          fill: "-1",
-          data: [
-            ...Array(pastAvgOut.length - 1).fill(null),
-            ...bayesianPrediction.minOut
-          ],
-        },
-        // Bayesian Dose Plan
-        {
-          type: "bar" as const,
-          label: "Recommended Dose",
-          backgroundColor: "rgba(255, 170, 0, 0.5)",
-          borderColor: "white",
-          yAxisID: "y-right",
-          data: [
-            ...Array(pastAvgOut.length - 1).fill(null),
-            ...bayesianPrediction.futureDoseData
-          ],
-        }
-      ] : []),
-
-      // SGLD
-      ...(sgldPrediction.futureAvgOut.length > 0 ? [
-        {
-          type: "line" as const,
-          label: "SGLD",
-          borderColor: "rgb(0, 170, 255)",
-          backgroundColor: "rgba(0, 170, 255, 0.1)",
-          borderWidth: 1.5,
-          borderDash: [5, 5],
-          pointRadius: 0,
-          pointHoverRadius: 4,
-          tension: 0.4,
-          yAxisID: "y-left",
-          fill: false,
-          data: [
-            ...Array(pastAvgOut.length - 1).fill(null),
-            lastObserved,
-            ...sgldPrediction.futureAvgOut
-          ],
-        },
-        {
-          type: "line" as const,
-          backgroundColor: "rgba(0, 170, 255, 0.2)",
-          borderColor: "rgba(0, 170, 255, 0)",
-          pointRadius: 0,
-          pointHoverRadius: 0,
-          yAxisID: "y-left",
-          data: [
-            ...Array(pastAvgOut.length - 1).fill(null),
-            lastObserved,
-            ...sgldPrediction.maxOut
-          ],
-        },
-        {
-          type: "line" as const,
-          backgroundColor: "rgba(0, 170, 255, 0.2)",
-          borderColor: "rgba(0, 170, 255, 0)",
-          pointRadius: 0,
-          pointHoverRadius: 0,
-          yAxisID: "y-left",
-          fill: "-1",
-          data: [
-            ...Array(pastAvgOut.length - 1).fill(null),
-            lastObserved,
-            ...sgldPrediction.minOut
-          ],
-        }
-      ] : []),
 
       // Manual
       ...(manualPrediction.futureAvgOut.length > 0 ? [
@@ -302,7 +182,6 @@ export default function CurrentPredictChart({
             ...manualPrediction.minOut
           ],
         },
-        // Manual Dose Plan
         {
           type: "bar" as const,
           label: "Manual Schedule Dose",
@@ -315,7 +194,7 @@ export default function CurrentPredictChart({
           ],
         }
       ] : []),
-  
+
       // Past Dose
       {
         type: "bar" as const,

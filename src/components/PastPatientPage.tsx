@@ -7,7 +7,6 @@ import { Patient } from "@/types/patient";
 import Badge from "./ui/Badge";
 import Button from "./ui/Button";
 import { useState, useEffect } from "react";
-import { ResultsPostResponse } from "@/types/resultsPostResponse";
 
 interface PatientPageProps {
   patient: Patient;
@@ -25,9 +24,7 @@ export default function PastPatientPage({ patient }: PatientPageProps) {
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [showManualForm, setShowManualForm] = useState(false);
 
-  const [optimizedPrediction, setOptimizedPrediction] = useState<Prediction | null>(null);
   const [manualPrediction, setManualPrediction] = useState<Prediction | null>(null);
-  const [loadingOptimize, setLoadingOptimize] = useState(false);
 
   useEffect(() => {
     fetch("/api/patients")
@@ -39,34 +36,6 @@ export default function PastPatientPage({ patient }: PatientPageProps) {
   const currentPatientIndex = patients.findIndex(p => p.id === patient.id);
   const hasNextPatient = currentPatientIndex !== -1 && currentPatientIndex < patients.length - 1;
   const hasPreviousPatient = currentPatientIndex > 0;
-
-  const handleOptimize = async () => {
-    setLoadingOptimize(true);
-    try {
-      const res = await fetch("/api/results", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: patient.id,
-          alias: patient.id,
-          budget: patient.budget,
-          horizon: patient.horizon,
-        }),
-      });
-      if (!res.ok) throw new Error("Optimize failed");
-      const data: ResultsPostResponse = await res.json();
-      setOptimizedPrediction({
-        mean: data.meanOutcome,
-        min: data.minOutcome,
-        max: data.maxOutcome,
-        dosage: data.dosage,
-      });
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoadingOptimize(false);
-    }
-  };
 
   const handleManualSchedule = async (futureActions: number[]) => {
     try {
@@ -112,30 +81,6 @@ export default function PastPatientPage({ patient }: PatientPageProps) {
       data: patient.actions,
     },
   ];
-
-  if (optimizedPrediction) {
-    datasets.push(
-      {
-        type: "line" as const,
-        label: "Model Prediction (Optimal Schedule)",
-        backgroundColor: "rgb(220, 80, 60)",
-        borderColor: "rgb(220, 80, 60)",
-        pointRadius: 0,
-        pointHoverRadius: 4,
-        yAxisID: "y-left",
-        borderDash: [6, 3],
-        data: optimizedPrediction.mean,
-      },
-      {
-        type: "bar" as const,
-        label: "Optimal Treatment Hours",
-        backgroundColor: "rgba(220, 80, 60, 0.3)",
-        borderColor: "transparent",
-        yAxisID: "y-right",
-        data: optimizedPrediction.dosage,
-      }
-    );
-  }
 
   if (manualPrediction) {
     datasets.push({
@@ -214,33 +159,24 @@ export default function PastPatientPage({ patient }: PatientPageProps) {
             <Button
               className="w-56"
               variant="secondary"
-              onClick={handleOptimize}
-              disabled={loadingOptimize}
-            >
-              {loadingOptimize ? "Optimizing…" : "Optimal Schedule"}
-            </Button>
-
-            <Button
-              className="w-56"
-              variant="secondary"
               onClick={() => setShowManualForm(true)}
             >
               Manual Schedule
             </Button>
 
-            {(optimizedPrediction || manualPrediction) && (
+            {manualPrediction && (
               <Button
                 className="w-56"
                 variant="danger"
-                onClick={() => { setOptimizedPrediction(null); setManualPrediction(null); }}
+                onClick={() => setManualPrediction(null)}
               >
-                Clear Predictions
+                Clear Prediction
               </Button>
             )}
           </div>
 
           <div className="border-t border-[var(--color-border)] pt-4 text-sm text-gray-500">
-            <p>Historical trial data. Blue line = model prediction using actual doses. Run <em>Optimal Schedule</em> to see what the model recommends.</p>
+            <p>Historical trial data. Blue line = model prediction using actual doses. Enter a manual schedule to compare outcomes.</p>
           </div>
 
           <Link href="/patient">

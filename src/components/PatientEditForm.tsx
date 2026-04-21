@@ -9,10 +9,9 @@ interface PatientEditFormProps {
     patient: Patient;
     setPatient: React.Dispatch<React.SetStateAction<Patient | null>>;
     setShowForm: React.Dispatch<React.SetStateAction<boolean>>;
-    updateModelTimestamp: () => void;
 }
 
-export default function PatientEditForm({ patient, setPatient, setShowForm, updateModelTimestamp }: PatientEditFormProps) {
+export default function PatientEditForm({ patient, setPatient, setShowForm }: PatientEditFormProps) {
     const [name, setName] = useState(patient.name);
     const [budget, setBudget] = useState(patient.budget);
     const [maxDose, setMaxDose] = useState(patient.maxDose);
@@ -106,7 +105,6 @@ export default function PatientEditForm({ patient, setPatient, setShowForm, upda
             };
 
             setPatient(updatedPatient);
-            if (updateModelTimestamp) updateModelTimestamp();
             setIsEditing(false);
             setStatusMessage("");
             // Show success message

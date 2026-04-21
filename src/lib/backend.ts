@@ -26,8 +26,6 @@ export interface BackendPatient {
   treatment_start_week: number;
   n_treatment_weeks: number;
   observations: Array<{ week: number; dose_hours: number; mal_score: number | null }>;
-  alpha_r: number | null;
-  sinit_n: number | null;
 }
 
 export interface BackendModelResponse {
@@ -38,11 +36,6 @@ export interface BackendModelResponse {
     mal:  { mean: number[]; sd: number[]; p05: number[]; p95: number[]; scale: number };
     uefm: { mean: number[]; sd: number[]; p05: number[]; p95: number[]; scale: number };
     wmft: { mean: number[]; sd: number[]; p05: number[]; p95: number[]; scale: number };
-  };
-  recommended_schedule?: {
-    dose_hours_per_week: number[];
-    total_hours: number;
-    cem_convergence: number[];
   };
   n_samples: number;
 }
