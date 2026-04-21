@@ -59,7 +59,7 @@ export default function AllPatientsPage() {
   useEffect(() => {
     fetch("/api/patients")
       .then((res) => res.json())
-      .then((data) => setPatients(data))
+      .then((data) => { if (Array.isArray(data)) setPatients(data); })
       .catch((error) => console.error("Error loading patients:", error));
   }, []);
 
@@ -132,18 +132,12 @@ export default function AllPatientsPage() {
           </ul>
         </div>
 
-        <div className="relative group w-full flex justify-center">
-          <button
-            onClick={() => {}}
-            className="bg-[var(--color-primary)] text-white text-sm font-medium px-5 py-2.5 rounded-full opacity-60 cursor-not-allowed w-full"
-            disabled
-          >
-            + Add Patient
-          </button>
-          <div className="absolute left-1/2 -translate-x-1/2 mt-2 w-64 p-2 bg-[var(--foreground)]/60 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-50 pointer-events-none text-center">
-            The current demo version doesn&apos;t support adding new patients.
-          </div>
-        </div>
+        <button
+          onClick={() => setShowForm(true)}
+          className="bg-[var(--color-primary)] text-white text-sm font-medium px-5 py-2.5 rounded-full w-full"
+        >
+          + Add Patient
+        </button>
 
         <div className="border-t border-[var(--color-border)] pt-4">
           <ul className="list-disc list-inside text-sm text-gray-400 pl-2 space-y-1">

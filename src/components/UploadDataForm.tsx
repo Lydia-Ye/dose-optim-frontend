@@ -93,6 +93,7 @@ export default function UploadDataForm({ patientID, pastAvgOut, pastDoseData, se
             setPastAvgOutState(newOutcomeState);
             setPastDoseDataState(newDoseState);
             setPastDoseDataStateInputs(newDoseState.map(item => item === null || Number.isNaN(item) ? "" : String(item)));
+            setIsEditing(true);
         };
 
         reader.readAsText(file);
