@@ -20,35 +20,16 @@ export default function AllPatientsPage() {
   const [statusFilter, setStatusFilter] = useState("All");
 
   useEffect(() => {
-    if (nameFilter === "") {
-      setFilteredTableData(tableData);
-    } else {
-      const filteredRows = tableData.filter(row =>
-        row.name.toLowerCase().includes(nameFilter.toLowerCase())
-      );
-      setFilteredTableData(filteredRows);
-    }
-  }, [nameFilter, tableData]);
+    let base = tableData;
+    if (statusFilter === "Active") base = tableData.filter(r => !r.past);
+    else if (statusFilter === "Past") base = tableData.filter(r => r.past);
 
-  useEffect(() => {
-    if (statusFilter === "All") {
-      // Only show A and B for active, all for past
-      const filtered = [
-        { id: "11", name: "A", past: false },
-        { id: "15", name: "B", past: false },
-        ...tableData.filter(row => row.past)
-      ];
-      setFilteredTableData(filtered);
-    } else if (statusFilter === "Active") {
-      // Hardcode only A and B for Active
-      setFilteredTableData([
-        { id: "11", name: "A", past: false },
-        { id: "15", name: "B", past: false },
-      ]);
-    } else {
-      setFilteredTableData(tableData.filter(row => row.past));
+    if (nameFilter) {
+      base = base.filter(r => r.name.toLowerCase().includes(nameFilter.toLowerCase()));
     }
-  }, [statusFilter, tableData]);
+    setFilteredTableData(base);
+  }, [nameFilter, statusFilter, tableData]);
+
 
   const columns = [
     {
