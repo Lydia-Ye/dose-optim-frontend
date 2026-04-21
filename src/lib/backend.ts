@@ -37,6 +37,15 @@ export interface BackendModelResponse {
     uefm: { mean: number[]; sd: number[]; p05: number[]; p95: number[]; scale: number };
     wmft: { mean: number[]; sd: number[]; p05: number[]; p95: number[]; scale: number };
   };
+  latent_trajectories: {
+    mal:  { mean: number[]; sd: number[]; p05: number[]; p95: number[]; scale: number };
+    uefm: { mean: number[]; sd: number[]; p05: number[]; p95: number[]; scale: number };
+    wmft: { mean: number[]; sd: number[]; p05: number[]; p95: number[]; scale: number };
+  };
+  latent_states: {
+    s:   { mean: number[]; sd: number[]; p05: number[]; p95: number[]; scale: number };
+    r_m: { mean: number[]; sd: number[]; p05: number[]; p95: number[]; scale: number };
+  };
   n_samples: number;
 }
 
@@ -65,8 +74,14 @@ export function toFrontendPatient(p: BackendPatient): Patient {
 }
 
 /**
- * Enrich a frontend Patient with trajectory data from a ModelResponse.
- * outcomes = predicted MAL (0-5 scale), actions = dose hours per week.
+ * Enrich a frontend Patient with trajectory data.
+ *
+ * For PAST patients: outcomes = full predicted MAL trajectory (model output),
+ * actions = observed dose schedule.
+ *
+ * For ACTIVE patients: outcomes = only actually-observed MAL scores
+ * (sorted by week, null entries skipped), actions = observed doses at those
+ * same weeks. This keeps the manual-schedule form's slot count correct.
  */
 export function enrichWithTrajectory(
   patient: Patient,
@@ -74,20 +89,29 @@ export function enrichWithTrajectory(
   model: BackendModelResponse,
 ): Patient {
   const horizonWeeks = detail.horizon_weeks;
+  const scale = model.trajectories.mal.scale; // 5.0
 
-  // Build per-week dose array from observations (zero-filled for missing weeks)
-  const actions = new Array<number>(horizonWeeks).fill(0);
-  for (const obs of detail.observations) {
-    if (obs.week >= 0 && obs.week < horizonWeeks) {
-      actions[obs.week] = obs.dose_hours;
+  if (detail.is_past) {
+    // Past patients: show full predicted trajectory over the actual dose schedule
+    const actions = new Array<number>(horizonWeeks).fill(0);
+    for (const obs of detail.observations) {
+      if (obs.week >= 0 && obs.week < horizonWeeks) {
+        actions[obs.week] = obs.dose_hours;
+      }
     }
+    const outcomes = model.trajectories.mal.mean
+      .slice(0, horizonWeeks + 1)
+      .map(x => x * scale);
+    return { ...patient, outcomes, actions };
   }
 
-  // Predicted MAL trajectory (model output 0-1 → clinical 0-5)
-  const malMean = model.trajectories.mal.mean;
-  const scale = model.trajectories.mal.scale;  // 5.0
-  // malMean has length horizon_weeks+1 (initial state + each step); take first horizon_weeks+1
-  const outcomes = malMean.slice(0, horizonWeeks + 1).map(x => x * scale);
+  // Active patients: only include weeks with an actual MAL score recorded
+  const sorted = [...detail.observations]
+    .filter(o => o.mal_score !== null)
+    .sort((a, b) => a.week - b.week);
+
+  const outcomes = sorted.map(o => o.mal_score as number);
+  const actions  = sorted.map(o => o.dose_hours);
 
   return { ...patient, outcomes, actions };
 }

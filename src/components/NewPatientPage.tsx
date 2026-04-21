@@ -8,6 +8,8 @@ import UploadDataForm from "@/components/UploadDataForm";
 import PatientEditForm from "@/components/PatientEditForm";
 import ManualScheduleForm from "@/components/ManualScheduleForm";
 import PredictionSummary from "@/components/PredictionSummary";
+import ModelDetailPanels from "@/components/ModelDetailPanels";
+import { BandData } from "@/components/BandChart";
 
 import { Patient } from "@/types/patient";
 import Button from "./ui/Button";
@@ -19,10 +21,20 @@ interface PatientPageProps {
 }
 
 interface ModelPrediction {
+  // MAL smooth mean (epistemic only) — used by CurrentPredictChart and PredictionSummary
   maxOut: number[];
   futureAvgOut: number[];
   minOut: number[];
   futureDoseData: number[];
+  // Full notebook panels — present after a successful manual predict
+  malSmooth?:  BandData;  // Row 1: smooth mean
+  uefmSmooth?: BandData;
+  wmftSmooth?: BandData;
+  mal?:        BandData;  // Row 2: noisy observations
+  uefm?:       BandData;
+  wmft?:       BandData;
+  s?:          BandData;  // Row 3: latent states
+  rM?:         BandData;
 }
 
 const emptyPrediction: ModelPrediction = {
@@ -38,18 +50,25 @@ export default function NewPatientPage({ patient, setPatient }: PatientPageProps
   const [showManualScheduleForm, setShowManualScheduleForm] = useState(false);
   const [showManual, setShowManual] = useState(false);
 
-  const [pastAvgOut, setPastAvgOut] = useState<number[]>(patient.outcomes);
-  const [pastDoseData, setPastDoseData] = useState<number[]>(patient.actions);
+  const [pastAvgOut, setPastAvgOut] = useState<number[]>(patient.outcomes ?? []);
+  const [pastDoseData, setPastDoseData] = useState<number[]>(patient.actions ?? []);
 
   const [manualPrediction, setManualPrediction] = useState<ModelPrediction>(emptyPrediction);
+  const [activeTab, setActiveTab] = useState<"timeline" | "detail">("timeline");
 
   const hasPastData = pastAvgOut.length > 0 && pastDoseData.length > 0;
 
   const handleManualSchedule = useCallback(async (futureActions: number[]) => {
     try {
+      // Combine observed past doses (all but the last time step, which shares
+      // a row with futureActions[0] in the form) with the future planned doses
+      // to produce a full horizon_weeks schedule for the backend.
+      const pastDoses = pastDoseData.slice(0, Math.max(0, pastAvgOut.length - 1));
+      const fullSchedule = [...pastDoses, ...futureActions];
+
       const requestBody = {
         id: patient.id,
-        future_actions: futureActions,
+        future_actions: fullSchedule,
       };
 
       const res = await fetch("/api/manual-predict", {
@@ -58,7 +77,10 @@ export default function NewPatientPage({ patient, setPatient }: PatientPageProps
         body: JSON.stringify(requestBody),
       });
 
-      if (!res.ok) throw new Error("Manual prediction failed");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `Manual prediction failed (${res.status})`);
+      }
 
       const data = await res.json();
 
@@ -67,11 +89,20 @@ export default function NewPatientPage({ patient, setPatient }: PatientPageProps
         futureAvgOut: data.meanPrediction,
         minOut: data.minPrediction,
         futureDoseData: data.dosage,
+        malSmooth:  data.malSmooth,
+        uefmSmooth: data.uefmSmooth,
+        wmftSmooth: data.wmftSmooth,
+        mal:        data.mal,
+        uefm:       data.uefm,
+        wmft:       data.wmft,
+        s:          data.s,
+        rM:         data.rM,
       });
+      setActiveTab("detail");
     } catch (err) {
       console.error("Manual schedule prediction error:", err);
     }
-  }, [patient.id]);
+  }, [patient.id, pastAvgOut, pastDoseData]);
 
   const handleDataUpdated = (newAvgOut: number[], newDoseData: (number | null)[]) => {
     setPastAvgOut(newAvgOut);
@@ -255,20 +286,66 @@ export default function NewPatientPage({ patient, setPatient }: PatientPageProps
           </div>
         </div>
 
-        {/* Right Column: Chart */}
+        {/* Right Column: Tabbed Chart Area */}
         <div className='w-full'>
-          <h3 className="text-xl font-semibold mb-2">Treatment Timeline</h3>
-          <CurrentPredictChart
-            pastAvgOut={pastAvgOut}
-            pastDoseData={pastDoseData}
-            manualPrediction={manualPrediction}
-            horizon={patient.horizon}
-          />
+          {/* Tab Bar */}
+          <div className="flex border-b border-[var(--color-border)] mb-4">
+            <button
+              onClick={() => setActiveTab("timeline")}
+              className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === "timeline"
+                  ? "border-[var(--color-primary)] text-[var(--color-primary)]"
+                  : "border-transparent text-gray-500 hover:text-[var(--foreground)] hover:border-gray-300"
+              }`}
+            >
+              Treatment Timeline
+            </button>
+            {manualPrediction.mal && (
+              <button
+                onClick={() => setActiveTab("detail")}
+                className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === "detail"
+                    ? "border-[var(--color-primary)] text-[var(--color-primary)]"
+                    : "border-transparent text-gray-500 hover:text-[var(--foreground)] hover:border-gray-300"
+                }`}
+              >
+                Model Prediction Detail
+              </button>
+            )}
+          </div>
 
-          <PredictionSummary
-            pastAvgOut={pastAvgOut}
-            manualPrediction={manualPrediction}
-          />
+          {activeTab === "timeline" && (
+            <>
+              <CurrentPredictChart
+                pastAvgOut={pastAvgOut}
+                pastDoseData={pastDoseData}
+                manualPrediction={manualPrediction}
+                horizon={patient.horizon}
+              />
+              <PredictionSummary
+                pastAvgOut={pastAvgOut}
+                manualPrediction={manualPrediction}
+              />
+            </>
+          )}
+
+          {activeTab === "detail" &&
+           manualPrediction.mal && manualPrediction.malSmooth &&
+           manualPrediction.uefm && manualPrediction.uefmSmooth &&
+           manualPrediction.wmft && manualPrediction.wmftSmooth &&
+           manualPrediction.s && manualPrediction.rM && (
+            <ModelDetailPanels
+              mal={manualPrediction.mal}
+              malSmooth={manualPrediction.malSmooth}
+              uefm={manualPrediction.uefm}
+              uefmSmooth={manualPrediction.uefmSmooth}
+              wmft={manualPrediction.wmft}
+              wmftSmooth={manualPrediction.wmftSmooth}
+              s={manualPrediction.s}
+              rM={manualPrediction.rM}
+              dosage={manualPrediction.futureDoseData}
+            />
+          )}
 
           {/* Navigation Buttons */}
           <div className="flex justify-between items-center">

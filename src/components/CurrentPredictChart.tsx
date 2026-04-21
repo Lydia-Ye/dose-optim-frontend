@@ -150,7 +150,7 @@ export default function CurrentPredictChart({
           data: [
             ...Array(pastAvgOut.length - 1).fill(null),
             lastObserved,
-            ...manualPrediction.futureAvgOut
+            ...manualPrediction.futureAvgOut.slice(pastAvgOut.length, horizon + 1),
           ],
         },
         {
@@ -164,7 +164,7 @@ export default function CurrentPredictChart({
           data: [
             ...Array(pastAvgOut.length - 1).fill(null),
             lastObserved,
-            ...manualPrediction.maxOut
+            ...manualPrediction.maxOut.slice(pastAvgOut.length, horizon + 1),
           ],
         },
         {
@@ -179,7 +179,7 @@ export default function CurrentPredictChart({
           data: [
             ...Array(pastAvgOut.length - 1).fill(null),
             lastObserved,
-            ...manualPrediction.minOut
+            ...manualPrediction.minOut.slice(pastAvgOut.length, horizon + 1),
           ],
         },
         {
@@ -190,7 +190,7 @@ export default function CurrentPredictChart({
           yAxisID: "y-right",
           data: [
             ...Array(pastAvgOut.length - 1).fill(null),
-            ...manualPrediction.futureDoseData
+            ...manualPrediction.futureDoseData.slice(pastAvgOut.length - 1),
           ],
         }
       ] : []),
