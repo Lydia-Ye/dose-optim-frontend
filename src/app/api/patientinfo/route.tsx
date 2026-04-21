@@ -1,33 +1,35 @@
 import { NextResponse } from "next/server";
-import fs from "fs/promises";
-import path from "path";
-
-import { Patient } from "@/types/patient";
+import { backendGet, toFrontendPatient, BackendPatient, BACKEND_URL } from "@/lib/backend";
 import { PatientinfoPutRequest } from "@/types/patientinfoRoute";
 
-const filePath = path.join(process.cwd(), "src/app/api/data/patients.json");
-
-// PUT route updates patient information without affecting the model.
 export async function PUT(req: Request) {
   try {
     const data: PatientinfoPutRequest = await req.json();
+    const patientId = data.patientID;
 
-    // Find current patient in database.
-    const patientFileData = await fs.readFile(filePath, "utf-8");
-    const patients = JSON.parse(patientFileData);
-    const patient: Patient = patients.find((p: Patient) => p.id === data.patientID);
+    const current = await backendGet<BackendPatient>(`/v1/patients/${patientId}`);
 
-    // Update patient horizon.
-    patient.horizon = data.newHorizon;
+    const res = await fetch(`${BACKEND_URL}/v1/patients/${patientId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: current.name,
+        budget_hours: current.budget_hours,
+        max_dose_per_week: current.max_dose_per_week,
+        age_standardized: current.age_standardized,
+        weeks_since_stroke: current.weeks_since_stroke,
+        horizon_weeks: data.newHorizon,
+      }),
+      cache: "no-store",
+    });
+    if (!res.ok) throw new Error(`Backend PUT → ${res.status}`);
 
-    // Persist new data to disk.
-    await fs.writeFile(filePath, JSON.stringify(patients, null, 2));
+    const updated = await res.json();
+    const patient = toFrontendPatient(updated);
 
-    // Return new patient.
-    return NextResponse.json({ message: "Patient info updated", patient: patient });
-
+    return NextResponse.json({ message: "Patient info updated", patient });
   } catch (error) {
-    console.log(error);
+    console.error(error);
     return NextResponse.json({ error: "Failed to update patient info" }, { status: 500 });
   }
 }
