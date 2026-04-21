@@ -48,7 +48,8 @@ const options: ChartOptions<"line" | "bar"> = {
         text: "MAL Score",
       },
       min: 0,
-      max: 5
+      max: 5,
+      ticks: { stepSize: 1 },
     },
     "y-right": {
       type: "linear",
@@ -59,7 +60,7 @@ const options: ChartOptions<"line" | "bar"> = {
         text: "Treatment Hours",
       },
       min: 0,
-      max: 30,
+      max: 12,
       grid: {
         drawOnChartArea: false,
       },
@@ -93,9 +94,10 @@ export default function PredictChart({ data }: ChartProps) {
       if (dataset.type === 'line') {
         return {
           ...dataset,
-          pointRadius: 4,
-          pointHoverRadius: 1,
-          pointBackgroundColor: dataset.borderColor || 'rgb(65, 105, 225)',
+          borderWidth: 1.5,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          tension: 0.4,
         };
       }
       return dataset;
