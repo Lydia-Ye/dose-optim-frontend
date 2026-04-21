@@ -3,7 +3,9 @@
 import Link from "next/link";
 import PredictChart from "@/components/PredictChart";
 import ManualScheduleForm from "@/components/ManualScheduleForm";
+import ModelDetailPanels from "@/components/ModelDetailPanels";
 import { Patient } from "@/types/patient";
+import { BandData } from "@/components/BandChart";
 import Badge from "./ui/Badge";
 import Button from "./ui/Button";
 import { useState, useEffect } from "react";
@@ -17,6 +19,14 @@ interface Prediction {
   min: number[];
   max: number[];
   dosage: number[];
+  malSmooth?:  BandData;
+  uefmSmooth?: BandData;
+  wmftSmooth?: BandData;
+  mal?:        BandData;
+  uefm?:       BandData;
+  wmft?:       BandData;
+  s?:          BandData;
+  rM?:         BandData;
 }
 
 export default function PastPatientPage({ patient }: PatientPageProps) {
@@ -25,11 +35,12 @@ export default function PastPatientPage({ patient }: PatientPageProps) {
   const [showManualForm, setShowManualForm] = useState(false);
 
   const [manualPrediction, setManualPrediction] = useState<Prediction | null>(null);
+  const [activeTab, setActiveTab] = useState<"timeline" | "detail">("timeline");
 
   useEffect(() => {
     fetch("/api/patients")
       .then((res) => res.json())
-      .then((data) => setPatients(data))
+      .then((data) => { if (Array.isArray(data)) setPatients(data); })
       .catch((error) => console.error("Error loading patients:", error));
   }, []);
 
@@ -44,21 +55,35 @@ export default function PastPatientPage({ patient }: PatientPageProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: patient.id, future_actions: futureActions }),
       });
-      if (!res.ok) throw new Error("Manual predict failed");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `Manual prediction failed (${res.status})`);
+      }
       const data = await res.json();
       setManualPrediction({
-        mean: data.meanPrediction,
-        min: data.minPrediction,
-        max: data.maxPrediction,
+        mean:   data.meanPrediction,
+        min:    data.minPrediction,
+        max:    data.maxPrediction,
         dosage: futureActions,
+        malSmooth:  data.malSmooth,
+        uefmSmooth: data.uefmSmooth,
+        wmftSmooth: data.wmftSmooth,
+        mal:        data.mal,
+        uefm:       data.uefm,
+        wmft:       data.wmft,
+        s:          data.s,
+        rM:         data.rM,
       });
+      setActiveTab("detail");
     } catch (err) {
       console.error(err);
     }
   };
 
   // Build chart datasets
-  const labels = patient.outcomes.map((_, i) => `Week ${i + 1}`);
+  const outcomes = patient.outcomes ?? [];
+  const actions  = patient.actions  ?? [];
+  const labels = outcomes.map((_, i) => `Week ${i + 1}`);
 
   const datasets: object[] = [
     {
@@ -70,7 +95,7 @@ export default function PastPatientPage({ patient }: PatientPageProps) {
       pointHoverRadius: 4,
       yAxisID: "y-left",
       borderDash: [],
-      data: patient.outcomes,
+      data: outcomes,
     },
     {
       type: "bar" as const,
@@ -78,7 +103,7 @@ export default function PastPatientPage({ patient }: PatientPageProps) {
       backgroundColor: "rgba(58, 218, 55, 0.5)",
       borderColor: "white",
       yAxisID: "y-right",
-      data: patient.actions,
+      data: actions,
     },
   ];
 
@@ -98,9 +123,9 @@ export default function PastPatientPage({ patient }: PatientPageProps) {
 
   const chartData = { labels, datasets };
 
-  const totalDose = patient.actions.reduce((a, b) => a + b, 0);
-  const finalMAL = patient.outcomes.length > 0
-    ? Math.round(patient.outcomes[patient.outcomes.length - 1] * 1000) / 1000
+  const totalDose = actions.reduce((a, b) => a + b, 0);
+  const finalMAL = outcomes.length > 0
+    ? Math.round(outcomes[outcomes.length - 1] * 1000) / 1000
     : 0;
 
   return (
@@ -115,7 +140,7 @@ export default function PastPatientPage({ patient }: PatientPageProps) {
             onClick={(e) => e.stopPropagation()}
           >
             <ManualScheduleForm
-              readonlyOutcomes={patient.outcomes.slice(0, 1)}
+              readonlyOutcomes={outcomes.slice(0, 1)}
               readonlyActions={[]}
               onSubmit={handleManualSchedule}
               setShowForm={setShowManualForm}
@@ -186,10 +211,53 @@ export default function PastPatientPage({ patient }: PatientPageProps) {
 
         {/* Right Column */}
         <div className="w-full space-y-6">
-          <div>
-            <h3 className="text-xl font-semibold mt-8 mb-2">Treatment Timeline</h3>
-            <PredictChart data={chartData} />
+          {/* Tab Bar */}
+          <div className="flex border-b border-[var(--color-border)]">
+            <button
+              onClick={() => setActiveTab("timeline")}
+              className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === "timeline"
+                  ? "border-[var(--color-primary)] text-[var(--color-primary)]"
+                  : "border-transparent text-gray-500 hover:text-[var(--foreground)] hover:border-gray-300"
+              }`}
+            >
+              Treatment Timeline
+            </button>
+            {manualPrediction?.mal && (
+              <button
+                onClick={() => setActiveTab("detail")}
+                className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === "detail"
+                    ? "border-[var(--color-primary)] text-[var(--color-primary)]"
+                    : "border-transparent text-gray-500 hover:text-[var(--foreground)] hover:border-gray-300"
+                }`}
+              >
+                Model Prediction Detail
+              </button>
+            )}
           </div>
+
+          {activeTab === "timeline" && (
+            <PredictChart data={chartData} />
+          )}
+
+          {activeTab === "detail" &&
+           manualPrediction?.mal && manualPrediction.malSmooth &&
+           manualPrediction.uefm && manualPrediction.uefmSmooth &&
+           manualPrediction.wmft && manualPrediction.wmftSmooth &&
+           manualPrediction.s && manualPrediction.rM && (
+            <ModelDetailPanels
+              mal={manualPrediction.mal}
+              malSmooth={manualPrediction.malSmooth}
+              uefm={manualPrediction.uefm}
+              uefmSmooth={manualPrediction.uefmSmooth}
+              wmft={manualPrediction.wmft}
+              wmftSmooth={manualPrediction.wmftSmooth}
+              s={manualPrediction.s}
+              rM={manualPrediction.rM}
+              dosage={manualPrediction.dosage}
+            />
+          )}
 
           {/* Navigation */}
           <div className="flex justify-between items-center">
