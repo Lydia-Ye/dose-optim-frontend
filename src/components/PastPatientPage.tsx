@@ -110,14 +110,43 @@ export default function PastPatientPage({ patient }: PatientPageProps) {
   if (manualPrediction) {
     datasets.push({
       type: "line" as const,
-      label: "Model Prediction (Manual Schedule)",
-      backgroundColor: "rgb(160, 80, 220)",
-      borderColor: "rgb(160, 80, 220)",
+      label: "Manual Schedule Prediction",
+      backgroundColor: "rgba(255, 0, 170, 0.1)",
+      borderColor: "rgb(255, 0, 170)",
       pointRadius: 0,
       pointHoverRadius: 4,
       yAxisID: "y-left",
-      borderDash: [4, 4],
+      borderDash: [5, 5],
       data: manualPrediction.mean,
+    });
+    datasets.push({
+      type: "line" as const,
+      label: "Manual Schedule Max Outcome",
+      backgroundColor: "rgba(255, 0, 170, 0.2)",
+      borderColor: "rgba(255, 0, 170, 0)",
+      pointRadius: 0,
+      pointHoverRadius: 0,
+      yAxisID: "y-left",
+      data: manualPrediction.max,
+    });
+    datasets.push({
+      type: "line" as const,
+      label: "Manual Schedule Min Outcome",
+      backgroundColor: "rgba(255, 0, 170, 0.2)",
+      borderColor: "rgba(255, 0, 170, 0)",
+      pointRadius: 0,
+      pointHoverRadius: 0,
+      yAxisID: "y-left",
+      fill: "-1",
+      data: manualPrediction.min,
+    });
+    datasets.push({
+      type: "bar" as const,
+      label: "Manual Schedule Dose",
+      backgroundColor: "rgba(255, 0, 170, 0.5)",
+      borderColor: "white",
+      yAxisID: "y-right",
+      data: manualPrediction.dosage,
     });
   }
 

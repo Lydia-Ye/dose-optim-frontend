@@ -70,8 +70,14 @@ const options: ChartOptions<"line" | "bar"> = {
   plugins: {
     legend: {
       labels: {
+        filter: (legendItem) => {
+          return !["Manual Schedule Max Outcome", "Manual Schedule Min Outcome", "Manual Schedule Dose"].includes(legendItem.text);
+        },
         boxWidth: 16,
         padding: 12,
+        font: {
+          size: 12,
+        },
         usePointStyle: true,
       },
     },
