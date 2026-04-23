@@ -27,6 +27,7 @@ export default function UploadDataForm({ patientID, pastAvgOut, pastDoseData, se
     const [loading, setLoading] = useState(false);
     const [progress, setProgress] = useState(0);
     const [statusMessage, setStatusMessage] = useState("");
+    const [success, setSuccess] = useState(false);
 
     useEffect(() => {
         let interval: NodeJS.Timeout | null = null;
@@ -186,26 +187,28 @@ export default function UploadDataForm({ patientID, pastAvgOut, pastDoseData, se
         }
 
         setLoading(true);
-        setStatusMessage("Updating patient data...");
-
-        const requestBody: ResultsPutRequest = {
-            patientID: patientID,
-            pastAvgOutState: pastAvgOutState,
-            pastDoseDataState: pastDoseDataState
-        }
+        setSuccess(false);
 
         try {
+            setStatusMessage("Saving observations…");
             const res = await fetch("/api/results", {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(requestBody),
+                body: JSON.stringify({
+                    patientID,
+                    pastAvgOutState,
+                    pastDoseDataState,
+                } satisfies ResultsPutRequest),
             });
+            if (!res.ok) throw new Error("Failed to save observations");
 
-            if (!res.ok) throw new Error("Failed to obtain results");
-            const data = await res.json();
-            console.log(data);
+            setStatusMessage("Updating model…");
+            const retrainRes = await fetch(`/api/retrain/${patientID}`, { method: "POST" });
+            if (!retrainRes.ok) throw new Error("Failed to update model");
+
             if (onDataUpdated) onDataUpdated(pastAvgOutState, pastDoseDataState);
-            setShowForm(false);
+            setSuccess(true);
+            setIsEditing(false);
         } catch {
             setValidationError("Failed to update data. Please try again.");
         } finally {
@@ -224,19 +227,13 @@ export default function UploadDataForm({ patientID, pastAvgOut, pastDoseData, se
                     <h2 className="text-2xl font-bold">Observed Data</h2>
                     <div className="flex gap-2 ml-auto">
                         {!isEmpty && !isEditing ? (
-                            <div className="relative group">
-                                <Button
-                                    type="button"
-                                    variant="secondary"
-                                    onClick={() => {}}
-                                    disabled
-                                >
-                                    Edit
-                                </Button>
-                                <div className="absolute left-1/2 -translate-x-1/2 mt-2 w-64 p-2 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-50 pointer-events-none text-center">
-                                    The current demo version doesn&apos;t support dynamic data update.
-                                </div>
-                            </div>
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                onClick={() => setIsEditing(true)}
+                            >
+                                Edit
+                            </Button>
                         ) : (
                             !isEmpty && (
                                 <>
@@ -410,19 +407,28 @@ export default function UploadDataForm({ patientID, pastAvgOut, pastDoseData, se
                     {/* You can add info here, e.g., Max Dose or Horizon if available */}
                 </div>
                 <div className="flex flex-col items-center w-full mt-6">
-                    {(loading || false) && statusMessage && (
+                    {loading && statusMessage && (
                         <div className="w-full flex justify-center z-20 mb-2">
-                            <div className="max-w-lg w-full mx-auto px-6 py-3 bg-green-50 border border-green-300 rounded-lg shadow text-green-900 text-base font-semibold flex items-center justify-center text-center tracking-wide" style={{letterSpacing: '0.01em', fontSize: '1.1rem'}}>
+                            <div className="max-w-lg w-full mx-auto px-6 py-3 bg-blue-50 border border-blue-300 rounded-lg shadow text-blue-900 text-base font-semibold flex items-center gap-3 justify-center text-center tracking-wide">
+                                <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin shrink-0" />
                                 {statusMessage}
                             </div>
                         </div>
                     )}
-                    {(loading || false) && (
+                    {loading && (
                         <div className="w-full h-1 bg-gray-200 rounded-b-lg overflow-hidden">
                             <div
                                 className="h-full bg-[var(--color-primary)] transition-all duration-200"
                                 style={{ width: `${progress}%` }}
                             />
+                        </div>
+                    )}
+                    {success && (
+                        <div className="w-full flex justify-center z-20">
+                            <div className="max-w-lg w-full mx-auto px-6 py-3 bg-green-50 border border-green-300 rounded-lg shadow text-green-900 text-base font-semibold flex items-center gap-3 justify-center text-center">
+                                <svg className="w-5 h-5 text-green-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                Observations saved. Model updated successfully.
+                            </div>
                         </div>
                     )}
                 </div>
