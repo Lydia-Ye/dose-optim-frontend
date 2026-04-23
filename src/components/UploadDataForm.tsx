@@ -321,7 +321,7 @@ export default function UploadDataForm({ patientID, pastAvgOut, pastDoseData, se
                                         key={i}
                                         ref={i === pastDoseDataState.length - 1 ? lastRowRef : null}
                                     >
-                                        <div>{i * 2}</div>
+                                        <div>{i}</div>
                                         <div>
                                             {isEditing ? (
                                                 <input
