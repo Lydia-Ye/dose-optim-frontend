@@ -147,7 +147,7 @@ export default function ManualScheduleForm({
           )}
           <div className="overflow-x-auto max-h-96 overflow-y-auto rounded-lg">
             <div className="grid grid-cols-4 gap-2 px-2 py-2 bg-gray-50 rounded-t-lg border-b border-gray-200 sticky top-0 z-10">
-              <div className="font-semibold">TreatmentWeek</div>
+              <div className="font-semibold">Treatment Week</div>
               <div className="font-semibold">MAL Score</div>
               <div className="font-semibold">Treatment Hours</div>
               <div className="font-semibold">Status</div>
@@ -158,7 +158,7 @@ export default function ManualScheduleForm({
                 const isLast = i === readonlyOutcomes.length - 1;
                 return (
                   <div className="grid grid-cols-4 gap-2 px-2 py-3 items-center" key={`row-${i}`} ref={isLast ? lastRowRef : null}>
-                    <div>{i * 2}</div>
+                    <div>{i}</div>
                     <div>
                       <input
                         type="text"
@@ -196,7 +196,7 @@ export default function ManualScheduleForm({
               {/* Future planned data */}
               {Array.from({ length: numFutureActions }).map((_, idx) => (
                 <div className="grid grid-cols-4 gap-2 px-2 py-3 items-center" key={`future-row-${idx}`}> 
-                  <div>{(readonlyOutcomes.length + idx) * 2}</div>
+                  <div>{readonlyOutcomes.length + idx}</div>
                   <div>
                     <input
                       type="text"
