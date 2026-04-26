@@ -68,6 +68,7 @@ export function toFrontendPatient(p: BackendPatient): Patient {
     horizon: p.horizon_weeks,
     outcomes: [],
     actions: [],
+    observedMal: [],
     modelBayesian: { modelAlias: p.id, modelUri: `backend://${p.id}` },
     modelSGLD:     { modelAlias: p.id, modelUri: `backend://${p.id}` },
   };
@@ -94,15 +95,19 @@ export function enrichWithTrajectory(
   if (detail.is_past) {
     // Past patients: show full predicted trajectory over the actual dose schedule
     const actions = new Array<number>(horizonWeeks).fill(0);
+    const observedMal = new Array<number | null>(horizonWeeks + 1).fill(null);
     for (const obs of detail.observations) {
       if (obs.week >= 0 && obs.week < horizonWeeks) {
         actions[obs.week] = obs.dose_hours;
+      }
+      if (obs.mal_score !== null && obs.week >= 0 && obs.week <= horizonWeeks) {
+        observedMal[obs.week] = obs.mal_score;
       }
     }
     const outcomes = model.trajectories.mal.mean
       .slice(0, horizonWeeks + 1)
       .map(x => x * scale);
-    return { ...patient, outcomes, actions };
+    return { ...patient, outcomes, actions, observedMal };
   }
 
   // Active patients: only include weeks with an actual MAL score recorded

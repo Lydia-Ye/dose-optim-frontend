@@ -81,26 +81,34 @@ export default function PastPatientPage({ patient }: PatientPageProps) {
   };
 
   // Build chart datasets
-  const outcomes = patient.outcomes ?? [];
-  const actions  = patient.actions  ?? [];
+  const outcomes    = patient.outcomes    ?? [];
+  const actions     = patient.actions     ?? [];
+  const observedMal = patient.observedMal ?? [];
   const labels = outcomes.map((_, i) => `Week ${i + 1}`);
+
+  const scatterPoints = observedMal
+    .map((v, i) => v !== null ? { x: i, y: v } : null)
+    .filter((p): p is { x: number; y: number } => p !== null);
 
   const datasets: object[] = [
     {
       type: "line" as const,
-      label: "Model Prediction (Actual Schedule)",
-      backgroundColor: "rgb(65, 105, 225)",
-      borderColor: "rgb(65, 105, 225)",
-      pointRadius: 0,
-      pointHoverRadius: 4,
+      label: "Observed MAL",
+      backgroundColor: "rgba(30, 90, 200, 0.1)",
+      borderColor: "rgb(30, 90, 200)",
+      pointBackgroundColor: "rgb(30, 90, 200)",
+      pointRadius: 5,
+      pointHoverRadius: 7,
+      pointStyle: "circle",
+      fill: false,
+      tension: 0,
       yAxisID: "y-left",
-      borderDash: [],
-      data: outcomes,
+      data: scatterPoints,
     },
     {
       type: "bar" as const,
       label: "Actual Treatment Hours",
-      backgroundColor: "rgba(58, 218, 55, 0.5)",
+      backgroundColor: "rgb(34, 139, 34)",
       borderColor: "white",
       yAxisID: "y-right",
       data: actions,
@@ -111,8 +119,8 @@ export default function PastPatientPage({ patient }: PatientPageProps) {
     datasets.push({
       type: "line" as const,
       label: "Manual Schedule Prediction",
-      backgroundColor: "rgba(255, 0, 170, 0.1)",
-      borderColor: "rgb(255, 0, 170)",
+      backgroundColor: "rgba(100, 160, 240, 0.1)",
+      borderColor: "rgb(100, 160, 240)",
       pointRadius: 0,
       pointHoverRadius: 4,
       yAxisID: "y-left",
@@ -122,8 +130,8 @@ export default function PastPatientPage({ patient }: PatientPageProps) {
     datasets.push({
       type: "line" as const,
       label: "Manual Schedule Max Outcome",
-      backgroundColor: "rgba(255, 0, 170, 0.2)",
-      borderColor: "rgba(255, 0, 170, 0)",
+      backgroundColor: "rgba(100, 160, 240, 0.15)",
+      borderColor: "rgba(100, 160, 240, 0)",
       pointRadius: 0,
       pointHoverRadius: 0,
       yAxisID: "y-left",
@@ -132,8 +140,8 @@ export default function PastPatientPage({ patient }: PatientPageProps) {
     datasets.push({
       type: "line" as const,
       label: "Manual Schedule Min Outcome",
-      backgroundColor: "rgba(255, 0, 170, 0.2)",
-      borderColor: "rgba(255, 0, 170, 0)",
+      backgroundColor: "rgba(100, 160, 240, 0.15)",
+      borderColor: "rgba(100, 160, 240, 0)",
       pointRadius: 0,
       pointHoverRadius: 0,
       yAxisID: "y-left",
@@ -143,7 +151,7 @@ export default function PastPatientPage({ patient }: PatientPageProps) {
     datasets.push({
       type: "bar" as const,
       label: "Manual Schedule Dose",
-      backgroundColor: "rgba(255, 0, 170, 0.5)",
+      backgroundColor: "rgba(134, 210, 134, 0.8)",
       borderColor: "white",
       yAxisID: "y-right",
       data: manualPrediction.dosage,
@@ -153,9 +161,12 @@ export default function PastPatientPage({ patient }: PatientPageProps) {
   const chartData = { labels, datasets };
 
   const totalDose = actions.reduce((a, b) => a + b, 0);
-  const finalMAL = outcomes.length > 0
-    ? Math.round(outcomes[outcomes.length - 1] * 1000) / 1000
-    : 0;
+  const lastObserved = [...observedMal].reverse().find(v => v !== null) ?? null;
+  const finalMAL = lastObserved !== null
+    ? Math.round(lastObserved * 1000) / 1000
+    : outcomes.length > 0
+      ? Math.round(outcomes[outcomes.length - 1] * 1000) / 1000
+      : 0;
 
   return (
     <>
@@ -194,7 +205,7 @@ export default function PastPatientPage({ patient }: PatientPageProps) {
 
           <div className="text-sm text-gray-600 space-y-3">
             <p><strong>Total Treatment Hours:</strong> {Math.round(totalDose * 10) / 10} hrs</p>
-            <p><strong>Final Predicted MAL:</strong> {finalMAL} / 5</p>
+            <p><strong>Final Observed MAL:</strong> {finalMAL} / 5</p>
             <p><strong>Horizon:</strong> {patient.horizon} weeks</p>
           </div>
 
@@ -230,7 +241,7 @@ export default function PastPatientPage({ patient }: PatientPageProps) {
           </div>
 
           <div className="border-t border-[var(--color-border)] pt-4 text-sm text-gray-500">
-            <p>Historical trial data. Blue line = model prediction using actual doses. Enter a manual schedule to compare outcomes.</p>
+            <p>Historical trial data. Blue line = observed MAL scores. Enter a manual schedule to compare outcomes.</p>
           </div>
 
           <Link href="/patient">
@@ -317,7 +328,7 @@ export default function PastPatientPage({ patient }: PatientPageProps) {
                 {patient.age !== undefined && <p><strong>Age (approx):</strong> {patient.age}</p>}
                 {patient.weeksSinceStroke !== undefined && <p><strong>Weeks Since Stroke:</strong> {patient.weeksSinceStroke}</p>}
                 <p><strong>Total Treatment Hours:</strong> {Math.round(totalDose * 10) / 10} hrs</p>
-                <p><strong>Final Predicted MAL:</strong> {finalMAL} / 5</p>
+                <p><strong>Final Observed MAL:</strong> {finalMAL} / 5</p>
                 <p><strong>Horizon:</strong> {patient.horizon} weeks</p>
               </div>
               <Button type="button" variant="danger" onClick={() => setShowInfoModal(false)} className="w-32">
