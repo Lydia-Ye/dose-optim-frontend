@@ -25,7 +25,7 @@ export default function AllPatientsPage() {
     else if (statusFilter === "Past") base = tableData.filter(r => r.past);
 
     if (nameFilter) {
-      base = base.filter(r => r.name.toLowerCase().includes(nameFilter.toLowerCase()));
+      base = base.filter(r => r.displayId.toLowerCase().includes(nameFilter.toLowerCase()));
     }
     setFilteredTableData(base);
   }, [nameFilter, statusFilter, tableData]);
@@ -34,10 +34,10 @@ export default function AllPatientsPage() {
   const columns = [
     {
       name: "Patient ID",
-      selector: (row: TableRow) => row.name,
+      selector: (row: TableRow) => row.displayId,
       cell: (row: TableRow) => (
         <div onClick={() => router.push(`/patient/${row.id}`)} className="cursor-pointer font-medium text-[var(--foreground)] hover:text-[var(--color-primary)]">
-          {row.name}
+          {row.displayId}
         </div>
       ),
     },
@@ -64,11 +64,14 @@ export default function AllPatientsPage() {
   }, []);
 
   useEffect(() => {
-    const newTableData = patients.map((item) => ({
-      id: item.id,
-      name: item.name,
-      past: item.past,
-    }));
+    const newTableData = patients
+      .map((item) => ({
+        id: item.id,
+        displayId: item.displayId,
+        name: item.name,
+        past: item.past,
+      }))
+      .sort((a, b) => Number(a.past) - Number(b.past));
     setTableData(newTableData);
     setFilteredTableData(newTableData);
   }, [patients]);

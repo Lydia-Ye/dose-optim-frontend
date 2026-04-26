@@ -181,7 +181,7 @@ export default function NewPatientPage({ patient, setPatient }: PatientPageProps
         <div className="space-y-8">
           <div className="space-y-2">
             <h2 className="text-sm font-medium text-gray-500">Patient Detail</h2>
-            <h1 className="text-2xl font-bold text-[var(--foreground)]">Patient {patient.name}</h1>
+            <h1 className="text-2xl font-bold text-[var(--foreground)]">Patient {patient.displayId}</h1>
             <Badge variant="active">ACTIVE</Badge>
           </div>
 

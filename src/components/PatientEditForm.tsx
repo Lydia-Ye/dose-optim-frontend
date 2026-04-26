@@ -175,7 +175,7 @@ export default function PatientEditForm({ patient, setPatient, setShowForm }: Pa
             </div>
 
             <div className="space-y-4">
-                <h3 className="text-xl font-semibold mb-4">Patient ID: {patient.id}</h3>
+                <h3 className="text-xl font-semibold mb-4">Patient ID: {patient.displayId}</h3>
 
                 {/* Budget & Max Dose */}
                 <div className="flex gap-4">

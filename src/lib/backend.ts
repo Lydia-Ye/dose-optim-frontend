@@ -15,6 +15,7 @@ export const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:8000";
 
 export interface BackendPatient {
   id: string;
+  source_subject_id?: number | null;
   name: string;
   is_past: boolean;
   budget_hours: number;
@@ -55,8 +56,12 @@ export interface BackendModelResponse {
 
 /** Convert backend patient list item → frontend Patient (no trajectory yet). */
 export function toFrontendPatient(p: BackendPatient): Patient {
+  const displayId = p.source_subject_id != null ? String(p.source_subject_id) : p.name || p.id;
+
   return {
     id: p.id,
+    sourceSubjectId: p.source_subject_id ?? null,
+    displayId,
     name: p.name,
     past: p.is_past,
     budget: p.budget_hours,

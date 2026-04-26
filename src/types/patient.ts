@@ -20,6 +20,8 @@ export interface Patient {
 
     // Created on registering model with mlflow.
     id: string;
+    sourceSubjectId: number | null;
+    displayId: string;
 
     // Model data to sync with mlflow.
     modelBayesian: {
