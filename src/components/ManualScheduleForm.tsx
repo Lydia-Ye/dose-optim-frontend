@@ -29,8 +29,9 @@ export default function ManualScheduleForm({
   const [validationError, setValidationError] = useState<string | null>(null);
   const lastRowRef = useRef<HTMLDivElement>(null);
 
-  // Calculate number of future actions
-  const numFutureActions = horizon - (readonlyOutcomes.length - 2) - 1;
+  // Future doses start on the interval after the last real observation.
+  const observedDoseCount = Math.max(0, readonlyOutcomes.length - 1);
+  const numFutureActions = Math.max(0, horizon - observedDoseCount);
 
   // Only keep the correct number of future actions in state
   useEffect(() => {
@@ -53,7 +54,9 @@ export default function ManualScheduleForm({
     const newActions = Array(numFutureActions).fill(0);
     
     // Calculate remaining budget
-    const pastActionsSum = readonlyActions.reduce((sum, action) => sum + (action || 0), 0);
+    const pastActionsSum = readonlyActions
+      .slice(0, observedDoseCount)
+      .reduce((sum, action) => sum + (action || 0), 0);
     const remainingBudget = budget - pastActionsSum;
     
     if (remainingBudget <= 0) {
@@ -188,39 +191,42 @@ export default function ManualScheduleForm({
                       )}
                     </div>
                     <div className="text-gray-400 text-sm">
-                      Observed
+                      {isLast && numFutureActions > 0 ? "Observed / Planned" : "Observed"}
                     </div>
                   </div>
                 );
               })}
               {/* Future planned data */}
-              {Array.from({ length: numFutureActions }).map((_, idx) => (
-                <div className="grid grid-cols-4 gap-2 px-2 py-3 items-center" key={`future-row-${idx}`}> 
-                  <div>{readonlyOutcomes.length + idx}</div>
-                  <div>
-                    <input
-                      type="text"
-                      value={""}
-                      readOnly
-                      className="px-3 py-2 border rounded w-full bg-gray-100 text-gray-500"
-                    />
+              {Array.from({ length: Math.max(0, numFutureActions - 1) }).map((_, idx) => {
+                const actionIndex = idx + 1;
+                return (
+                  <div className="grid grid-cols-4 gap-2 px-2 py-3 items-center" key={`future-row-${idx}`}>
+                    <div>{readonlyOutcomes.length + idx}</div>
+                    <div>
+                      <input
+                        type="text"
+                        value={""}
+                        readOnly
+                        className="px-3 py-2 border rounded w-full bg-gray-100 text-gray-500"
+                      />
+                    </div>
+                    <div>
+                      <input
+                        type="number"
+                        min="0"
+                        max={maxDose}
+                        step="any"
+                        value={futureActions[actionIndex]}
+                        onChange={e => updateAction(actionIndex, e.target.value)}
+                        className="px-3 py-2 border rounded w-full"
+                      />
+                    </div>
+                    <div className="text-gray-400 text-sm">
+                      Planned
+                    </div>
                   </div>
-                  <div>
-                    <input
-                      type="number"
-                      min="0"
-                      max={maxDose}
-                      step="any"
-                      value={futureActions[idx]}
-                      onChange={e => updateAction(idx, e.target.value)}
-                      className="px-3 py-2 border rounded w-full"
-                    />
-                  </div>
-                  <div className="text-gray-400 text-sm">
-                    Planned
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
           <div className="text-sm text-gray-500 mt-2">
