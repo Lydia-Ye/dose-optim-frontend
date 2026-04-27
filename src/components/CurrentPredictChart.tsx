@@ -164,6 +164,13 @@ export default function CurrentPredictChart({
       tooltip: {
         mode: "nearest",
         intersect: false,
+        callbacks: {
+          title: (items) => {
+            if (items.length === 0) return '';
+            const x = items[0].parsed.x;
+            return `Week ${Math.floor(x)}`;
+          },
+        },
       },
     },
   };
