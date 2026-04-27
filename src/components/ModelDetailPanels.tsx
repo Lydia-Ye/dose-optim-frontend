@@ -26,11 +26,11 @@ interface ModelDetailPanelsProps {
 }
 
 const COLORS = {
-  mal:  { line: "rgb(31,119,180)",  fill: "rgba(31,119,180,0.15)"  },
-  uefm: { line: "rgb(255,127,14)",  fill: "rgba(255,127,14,0.15)"  },
-  wmft: { line: "rgb(44,160,44)",   fill: "rgba(44,160,44,0.15)"   },
-  s:    { line: "rgb(148,103,189)", fill: "rgba(148,103,189,0.15)" },
-  rM:   { line: "rgb(140,86,75)",   fill: "rgba(140,86,75,0.15)"   },
+  mal:  { color: "rgb(31,119,180)",  fillColor: "rgba(31,119,180,0.15)"  },
+  uefm: { color: "rgb(255,127,14)",  fillColor: "rgba(255,127,14,0.15)"  },
+  wmft: { color: "rgb(44,160,44)",   fillColor: "rgba(44,160,44,0.15)"   },
+  s:    { color: "rgb(148,103,189)", fillColor: "rgba(148,103,189,0.15)" },
+  rM:   { color: "rgb(140,86,75)",   fillColor: "rgba(140,86,75,0.15)"   },
 };
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {

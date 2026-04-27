@@ -84,17 +84,17 @@ export default function PredictChart({ data }: ChartProps) {
     },
   };
 
-  const chartData = {
+  const chartData: ChartData<"line" | "bar"> = {
     ...data,
     labels: data.labels?.map((_, index) => index + 1),
     datasets: data.datasets.map(dataset => {
       if (dataset.type === 'line') {
-        const d = dataset as Record<string, unknown>;
+        const d = dataset as unknown as Record<string, unknown>;
         return {
           ...dataset,
           borderWidth: 1.5,
-          pointRadius:      d.pointRadius      ?? 0,
-          pointHoverRadius: d.pointHoverRadius ?? 4,
+          pointRadius: typeof d.pointRadius === "number" ? d.pointRadius : 0,
+          pointHoverRadius: typeof d.pointHoverRadius === "number" ? d.pointHoverRadius : 4,
           tension: d.showLine === false ? 0 : (typeof d.tension === "number" ? d.tension : 0.4),
         };
       }

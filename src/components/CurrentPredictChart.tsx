@@ -12,7 +12,8 @@ import {
   LineController,
   BarController,
   Filler,
-  ChartOptions
+  ChartOptions,
+  Scale
 } from 'chart.js';
 import { Chart } from 'react-chartjs-2';
 
@@ -140,7 +141,7 @@ export default function CurrentPredictChart({
         min: -0.5,
         max: xMax + 0.5,
         title: { display: true, text: "Treatment Week" },
-        afterBuildTicks: (axis: any) => {
+        afterBuildTicks: (axis: Scale) => {
           axis.ticks = Array.from({ length: xMax }, (_, i) => ({ value: i + 0.5 }));
         },
         ticks: {

@@ -6,26 +6,14 @@ import type { ChartData } from 'chart.js';
 import { Patient } from "@/types/patient";
 import Badge from "./ui/Badge";
 import Button from "./ui/Button";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 
 interface PatientPageProps {
   patient: Patient;
 }
 
 export default function PastPatientPage({ patient }: PatientPageProps) {
-  const [patients, setPatients] = useState<Patient[]>([]);
   const [showInfoModal, setShowInfoModal] = useState(false);
-
-  useEffect(() => {
-    fetch("/api/patients")
-      .then((res) => res.json())
-      .then((data) => { if (Array.isArray(data)) setPatients(data); })
-      .catch((error) => console.error("Error loading patients:", error));
-  }, []);
-
-  const currentPatientIndex = patients.findIndex(p => p.id === patient.id);
-  const hasNextPatient = currentPatientIndex !== -1 && currentPatientIndex < patients.length - 1;
-  const hasPreviousPatient = currentPatientIndex > 0;
 
   // Build chart datasets
   const outcomes    = patient.outcomes    ?? [];
