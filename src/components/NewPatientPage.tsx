@@ -425,12 +425,11 @@ export default function NewPatientPage({ patient, setPatient }: PatientPageProps
                     metricTab === "WMFT" ? manualPrediction.wmftSmooth :
                     undefined
                   }
-                  cemPrediction={cemPrediction.futureAvgOut.length > 0 ? cemPrediction : undefined}
+                  cemPrediction={metricTab === "MAL" && cemPrediction.futureAvgOut.length > 0 ? cemPrediction : undefined}
                   cemSmoothBand={
-                    cemPrediction.futureAvgOut.length > 0
+                    metricTab !== "MAL" && cemPrediction.futureAvgOut.length > 0
                       ? metricTab === "UEFM" ? cemPrediction.uefmSmooth
-                        : metricTab === "WMFT" ? cemPrediction.wmftSmooth
-                        : undefined
+                        : cemPrediction.wmftSmooth
                       : undefined
                   }
                   yLabel={

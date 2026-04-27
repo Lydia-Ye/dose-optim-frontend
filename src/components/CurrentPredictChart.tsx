@@ -324,6 +324,8 @@ export default function CurrentPredictChart({
               data: smoothLower,
             },
           ]
+        : showCemSmooth
+        ? [] // CEM-only smooth mode: no manual datasets, no observed line
         : [
             // --- MAL mode: observed + optional manual prediction ---
             {
