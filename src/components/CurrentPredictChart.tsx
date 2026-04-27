@@ -99,9 +99,10 @@ export default function CurrentPredictChart({
   // --- Single merged dose dataset ---
   // Past doses:   weeks 0..n-2  at x = 0.5, 1.5, …, n-1.5  (green)
   // Future doses: weeks n-1..horizon-1 at x = n-0.5, …, horizon-0.5 (pink)
+  const xMax = horizon;
   const dosePoints: { x: number; y: number | null }[] = [];
   const doseColors: string[] = [];
-  for (let w = 0; w < horizon; w++) {
+  for (let w = 0; w < xMax; w++) {
     const isPast = w < n - 1;
     dosePoints.push({
       x: w + 0.5,
@@ -116,13 +117,13 @@ export default function CurrentPredictChart({
     scales: {
       x: {
         type: "linear",
-        // Small padding so MAL(0) at x=0 and last bar at x=horizon-0.5 aren't clipped
+        // Small padding so MAL(0) at x=0 and last bar aren't clipped
         min: -0.5,
-        max: horizon + 0.5,
+        max: xMax + 0.5,
         title: { display: true, text: "Treatment Week" },
         // Place ticks at dose bar centres (0.5, 1.5, …) so labels align with bars
         afterBuildTicks: (axis: any) => {
-          axis.ticks = Array.from({ length: horizon }, (_, i) => ({ value: i + 0.5 }));
+          axis.ticks = Array.from({ length: xMax }, (_, i) => ({ value: i + 0.5 }));
         },
         ticks: {
           callback: (_value: number | string, index: number) => String(index),

@@ -2,10 +2,8 @@
 
 import Link from "next/link";
 import PredictChart from "@/components/PredictChart";
-import ManualScheduleForm from "@/components/ManualScheduleForm";
-import ModelDetailPanels from "@/components/ModelDetailPanels";
+import type { ChartData } from 'chart.js';
 import { Patient } from "@/types/patient";
-import { BandData } from "@/components/BandChart";
 import Badge from "./ui/Badge";
 import Button from "./ui/Button";
 import { useState, useEffect } from "react";
@@ -14,28 +12,9 @@ interface PatientPageProps {
   patient: Patient;
 }
 
-interface Prediction {
-  mean: number[];
-  min: number[];
-  max: number[];
-  dosage: number[];
-  malSmooth?:  BandData;
-  uefmSmooth?: BandData;
-  wmftSmooth?: BandData;
-  mal?:        BandData;
-  uefm?:       BandData;
-  wmft?:       BandData;
-  s?:          BandData;
-  rM?:         BandData;
-}
-
 export default function PastPatientPage({ patient }: PatientPageProps) {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [showInfoModal, setShowInfoModal] = useState(false);
-  const [showManualForm, setShowManualForm] = useState(false);
-
-  const [manualPrediction, setManualPrediction] = useState<Prediction | null>(null);
-  const [activeTab, setActiveTab] = useState<"timeline" | "detail">("timeline");
 
   useEffect(() => {
     fetch("/api/patients")
@@ -48,43 +27,17 @@ export default function PastPatientPage({ patient }: PatientPageProps) {
   const hasNextPatient = currentPatientIndex !== -1 && currentPatientIndex < patients.length - 1;
   const hasPreviousPatient = currentPatientIndex > 0;
 
-  const handleManualSchedule = async (futureActions: number[]) => {
-    try {
-      const res = await fetch("/api/manual-predict", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: patient.id, future_actions: futureActions }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error ?? `Manual prediction failed (${res.status})`);
-      }
-      const data = await res.json();
-      setManualPrediction({
-        mean:   data.meanPrediction,
-        min:    data.minPrediction,
-        max:    data.maxPrediction,
-        dosage: futureActions,
-        malSmooth:  data.malSmooth,
-        uefmSmooth: data.uefmSmooth,
-        wmftSmooth: data.wmftSmooth,
-        mal:        data.mal,
-        uefm:       data.uefm,
-        wmft:       data.wmft,
-        s:          data.s,
-        rM:         data.rM,
-      });
-      setActiveTab("detail");
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
   // Build chart datasets
   const outcomes    = patient.outcomes    ?? [];
   const actions     = patient.actions     ?? [];
   const observedMal = patient.observedMal ?? [];
-  const labels = outcomes.map((_, i) => `Week ${i + 1}`);
+
+  // Adaptive x-axis: end at the last week that has actual data
+  const lastMalWeek  = observedMal.reduce<number>((max, v, i) => v !== null ? i : max, -1);
+  const lastDoseWeek = actions.reduce((max, v, i) => v > 0 ? i : max, -1);
+  const maxWeek = Math.max(lastMalWeek, lastDoseWeek, 0);
+
+  const labels = Array.from({ length: maxWeek + 1 }, (_, i) => `Week ${i + 1}`);
 
   const scatterPoints = observedMal
     .map((v, i) => v !== null ? { x: i, y: v } : null)
@@ -111,54 +64,11 @@ export default function PastPatientPage({ patient }: PatientPageProps) {
       backgroundColor: "rgb(34, 139, 34)",
       borderColor: "white",
       yAxisID: "y-right",
-      data: actions,
+      data: actions.slice(0, maxWeek + 1),
     },
   ];
 
-  if (manualPrediction) {
-    datasets.push({
-      type: "line" as const,
-      label: "Manual Schedule Prediction",
-      backgroundColor: "rgba(100, 160, 240, 0.1)",
-      borderColor: "rgb(100, 160, 240)",
-      pointRadius: 0,
-      pointHoverRadius: 4,
-      yAxisID: "y-left",
-      borderDash: [5, 5],
-      data: manualPrediction.mean,
-    });
-    datasets.push({
-      type: "line" as const,
-      label: "Manual Schedule Max Outcome",
-      backgroundColor: "rgba(100, 160, 240, 0.15)",
-      borderColor: "rgba(100, 160, 240, 0)",
-      pointRadius: 0,
-      pointHoverRadius: 0,
-      yAxisID: "y-left",
-      data: manualPrediction.max,
-    });
-    datasets.push({
-      type: "line" as const,
-      label: "Manual Schedule Min Outcome",
-      backgroundColor: "rgba(100, 160, 240, 0.15)",
-      borderColor: "rgba(100, 160, 240, 0)",
-      pointRadius: 0,
-      pointHoverRadius: 0,
-      yAxisID: "y-left",
-      fill: "-1",
-      data: manualPrediction.min,
-    });
-    datasets.push({
-      type: "bar" as const,
-      label: "Manual Schedule Dose",
-      backgroundColor: "rgba(134, 210, 134, 0.8)",
-      borderColor: "white",
-      yAxisID: "y-right",
-      data: manualPrediction.dosage,
-    });
-  }
-
-  const chartData = { labels, datasets };
+  const chartData = { labels, datasets } as ChartData<"line" | "bar">;
 
   const totalDose = actions.reduce((a, b) => a + b, 0);
   const lastObserved = [...observedMal].reverse().find(v => v !== null) ?? null;
@@ -170,29 +80,6 @@ export default function PastPatientPage({ patient }: PatientPageProps) {
 
   return (
     <>
-      {showManualForm && (
-        <div
-          className="fixed inset-0 bg-[rgba(0,0,0,0.2)] flex items-center justify-center z-50"
-          onClick={() => setShowManualForm(false)}
-        >
-          <div
-            className="bg-white rounded-2xl shadow-lg p-6 text-center"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <ManualScheduleForm
-              readonlyOutcomes={outcomes.slice(0, 1)}
-              readonlyActions={[]}
-              onSubmit={handleManualSchedule}
-              setShowForm={setShowManualForm}
-              maxDose={patient.maxDose}
-              horizon={patient.horizon}
-              budget={patient.budget}
-              onClose={() => setShowManualForm(false)}
-            />
-          </div>
-        </div>
-      )}
-
       <main className="w-full max-w-screen-xl mx-auto px-6 py-16 grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-10 items-start">
 
         {/* Left Column */}
@@ -217,31 +104,8 @@ export default function PastPatientPage({ patient }: PatientPageProps) {
             Patient Info
           </Button>
 
-          {/* Model controls */}
-          <div className="space-y-4">
-            <h2 className="text-lg font-semibold text-blue-600">Run Model</h2>
-
-            <Button
-              className="w-56"
-              variant="secondary"
-              onClick={() => setShowManualForm(true)}
-            >
-              Manual Schedule
-            </Button>
-
-            {manualPrediction && (
-              <Button
-                className="w-56"
-                variant="danger"
-                onClick={() => setManualPrediction(null)}
-              >
-                Clear Prediction
-              </Button>
-            )}
-          </div>
-
           <div className="border-t border-[var(--color-border)] pt-4 text-sm text-gray-500">
-            <p>Historical trial data. Blue line = observed MAL scores. Enter a manual schedule to compare outcomes.</p>
+            <p>Historical trial data. Blue line = observed MAL scores.</p>
           </div>
 
           <Link href="/patient">
@@ -250,57 +114,11 @@ export default function PastPatientPage({ patient }: PatientPageProps) {
         </div>
 
         {/* Right Column */}
-        <div className="w-full space-y-6">
-          {/* Tab Bar */}
-          <div className="flex border-b border-[var(--color-border)]">
-            <button
-              onClick={() => setActiveTab("timeline")}
-              className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === "timeline"
-                  ? "border-[var(--color-primary)] text-[var(--color-primary)]"
-                  : "border-transparent text-gray-500 hover:text-[var(--foreground)] hover:border-gray-300"
-              }`}
-            >
-              Treatment Timeline
-            </button>
-            {manualPrediction?.mal && (
-              <button
-                onClick={() => setActiveTab("detail")}
-                className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === "detail"
-                    ? "border-[var(--color-primary)] text-[var(--color-primary)]"
-                    : "border-transparent text-gray-500 hover:text-[var(--foreground)] hover:border-gray-300"
-                }`}
-              >
-                Model Prediction Detail
-              </button>
-            )}
-          </div>
+        <div className="w-full space-y-6 mt-8">
+          <PredictChart data={chartData} />
 
-          {activeTab === "timeline" && (
-            <PredictChart data={chartData} />
-          )}
-
-          {activeTab === "detail" &&
-           manualPrediction?.mal && manualPrediction.malSmooth &&
-           manualPrediction.uefm && manualPrediction.uefmSmooth &&
-           manualPrediction.wmft && manualPrediction.wmftSmooth &&
-           manualPrediction.s && manualPrediction.rM && (
-            <ModelDetailPanels
-              mal={manualPrediction.mal}
-              malSmooth={manualPrediction.malSmooth}
-              uefm={manualPrediction.uefm}
-              uefmSmooth={manualPrediction.uefmSmooth}
-              wmft={manualPrediction.wmft}
-              wmftSmooth={manualPrediction.wmftSmooth}
-              s={manualPrediction.s}
-              rM={manualPrediction.rM}
-              dosage={manualPrediction.dosage}
-            />
-          )}
-
-          {/* Navigation */}
-          <div className="flex justify-between items-center">
+          {/* Previous/Next Patient Navigation */}
+          {/* <div className="flex justify-between items-center">
             {hasPreviousPatient ? (
               <Link href={`/patient/${patients[currentPatientIndex - 1].id}`}>
                 <Button variant="outline">← Previous Patient</Button>
@@ -312,7 +130,7 @@ export default function PastPatientPage({ patient }: PatientPageProps) {
                 <Button variant="outline">Next Patient →</Button>
               </Link>
             ) : <div />}
-          </div>
+          </div> */}
         </div>
 
         {/* Info Modal */}

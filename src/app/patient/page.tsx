@@ -71,7 +71,11 @@ export default function AllPatientsPage() {
         name: item.name,
         past: item.past,
       }))
-      .sort((a, b) => Number(a.past) - Number(b.past));
+      .sort((a, b) => {
+        const statusDiff = Number(a.past) - Number(b.past);
+        if (statusDiff !== 0) return statusDiff;
+        return (parseInt(a.displayId) || 0) - (parseInt(b.displayId) || 0);
+      });
     setTableData(newTableData);
     setFilteredTableData(newTableData);
   }, [patients]);
