@@ -444,6 +444,7 @@ export default function NewPatientPage({ patient, setPatient }: PatientPageProps
                 <PredictionSummary
                   pastAvgOut={pastAvgOut}
                   manualPrediction={manualPrediction}
+                  cemPrediction={cemPrediction}
                 />
               )}
             </>
