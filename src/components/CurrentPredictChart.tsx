@@ -53,6 +53,8 @@ interface ChartProps {
 }
 
 const MAL_HIDDEN = ["Manual Schedule Max Outcome", "Manual Schedule Min Outcome"];
+const PREDICTION_BLUE = "rgb(100, 160, 240)";
+const PREDICTION_BLUE_FILL = "rgba(100, 160, 240, 0.1)";
 
 export default function CurrentPredictChart({
   pastAvgOut,
@@ -199,12 +201,14 @@ export default function CurrentPredictChart({
             {
               type: "line" as const,
               label: `${metric} Mean Trajectory`,
-              borderColor: "rgb(30, 90, 200)",
-              backgroundColor: "rgba(30, 90, 200, 0.1)",
+              borderColor: PREDICTION_BLUE,
+              backgroundColor: PREDICTION_BLUE_FILL,
               borderWidth: 2,
+              borderDash: [2, 5],
+              borderCapStyle: "round" as const,
               pointRadius: 4,
               pointHoverRadius: 6,
-              pointBackgroundColor: "rgb(30, 90, 200)",
+              pointBackgroundColor: PREDICTION_BLUE,
               tension: 0,
               yAxisID: "y-left",
               fill: false,
