@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import Link from "next/link";
 
 import CurrentPredictChart from "@/components/CurrentPredictChart";
@@ -55,6 +55,7 @@ export default function NewPatientPage({ patient, setPatient }: PatientPageProps
 
   const [manualPrediction, setManualPrediction] = useState<ModelPrediction>(emptyPrediction);
   const [activeTab, setActiveTab] = useState<"timeline" | "detail">("timeline");
+  const [metricTab, setMetricTab] = useState<"MAL" | "UEFM" | "WMFT">("MAL");
 
   const hasPastData = pastAvgOut.length > 0 && pastDoseData.length > 0;
 
@@ -98,7 +99,6 @@ export default function NewPatientPage({ patient, setPatient }: PatientPageProps
         s:          data.s,
         rM:         data.rM,
       });
-      setActiveTab("detail");
     } catch (err) {
       console.error("Manual schedule prediction error:", err);
     }
@@ -316,16 +316,54 @@ export default function NewPatientPage({ patient, setPatient }: PatientPageProps
 
           {activeTab === "timeline" && (
             <>
-              <CurrentPredictChart
-                pastAvgOut={pastAvgOut}
-                pastDoseData={pastDoseData}
-                manualPrediction={manualPrediction}
-                horizon={patient.horizon}
-              />
-              <PredictionSummary
-                pastAvgOut={pastAvgOut}
-                manualPrediction={manualPrediction}
-              />
+              {/* Metric sub-tabs — pill style to distinguish from outer underline tabs */}
+              <div className="flex mb-4">
+                <div className="inline-flex bg-gray-100 rounded-lg p-1 gap-1">
+                  {(["MAL", "UEFM", "WMFT"] as const).map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => setMetricTab(m)}
+                      className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-all ${
+                        metricTab === m
+                          ? "bg-white text-[var(--color-primary)] shadow-sm"
+                          : "text-gray-500 hover:text-gray-700"
+                      }`}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {metricTab !== "MAL" && !manualPrediction.uefmSmooth?.mean?.length ? (
+                <p className="text-sm text-gray-400 text-center py-24">
+                  Run a manual schedule prediction to view the {metricTab} trajectory.
+                </p>
+              ) : (
+                <CurrentPredictChart
+                  pastAvgOut={pastAvgOut}
+                  pastDoseData={pastDoseData}
+                  manualPrediction={manualPrediction}
+                  horizon={patient.horizon}
+                  smoothBand={
+                    metricTab === "UEFM" ? manualPrediction.uefmSmooth :
+                    metricTab === "WMFT" ? manualPrediction.wmftSmooth :
+                    undefined
+                  }
+                  yLabel={
+                    metricTab === "UEFM" ? "UEFM Score" :
+                    metricTab === "WMFT" ? "WMFT Score" :
+                    "MAL Score"
+                  }
+                />
+              )}
+
+              {metricTab === "MAL" && (
+                <PredictionSummary
+                  pastAvgOut={pastAvgOut}
+                  manualPrediction={manualPrediction}
+                />
+              )}
             </>
           )}
 

@@ -36,20 +36,39 @@ interface ModelPrediction {
   futureDoseData: number[];
 }
 
+interface SmoothBand {
+  mean: number[];
+  p05:  number[];
+  p95:  number[];
+}
+
 interface ChartProps {
   pastAvgOut: number[];
   pastDoseData: number[];
   manualPrediction: ModelPrediction;
   horizon: number;
+  smoothBand?: SmoothBand;
+  yLabel?: string;
 }
+
+const MAL_HIDDEN = ["Manual Schedule Max Outcome", "Manual Schedule Min Outcome"];
 
 export default function CurrentPredictChart({
   pastAvgOut,
   pastDoseData,
   manualPrediction,
-  horizon
+  horizon,
+  smoothBand,
+  yLabel = "MAL Score",
 }: ChartProps) {
-  if (!pastAvgOut || pastAvgOut.length === 0) {
+  const showSmooth = !!(smoothBand?.mean?.length);
+  // Short metric name for labels, e.g. "UEFM Score" → "UEFM"
+  const metric = yLabel.replace(" Score", "");
+  const smoothBandUpperLabel = `${metric} 95th Percentile`;
+  const smoothBandLowerLabel = `${metric} 5th Percentile`;
+  const hiddenLegend = [...MAL_HIDDEN, smoothBandUpperLabel, smoothBandLowerLabel];
+
+  if (!showSmooth && (!pastAvgOut || pastAvgOut.length === 0)) {
     return <p className="mt-20 mb-80 text-center text-[var(--color-warning)]">Please upload patient data for visualization.</p>;
   }
 
@@ -57,16 +76,10 @@ export default function CurrentPredictChart({
   const hasManual = manualPrediction.futureAvgOut.length > 0;
   const lastObserved = pastAvgOut.at(-1) ?? 0;
 
-  // Layout: linear x-axis where week N occupies the band [N, N+1).
-  //   MAL points    → x = N       (left edge of each week's column)
-  //   Dose bars     → x = N + 0.5 (center of each week's column)
-  // Reading left-to-right: MAL(0) measured → Dose(0) applied → MAL(1) measured → …
-
-  // --- Observed MAL line ---
+  // --- MAL mode: observed line + optional prediction band ---
   const malObserved = pastAvgOut.map((y, w) => ({ x: w, y }));
 
-  // --- Predicted MAL + confidence band (connect from last observed point) ---
-  const malPredicted = hasManual
+  const malPredicted = (!showSmooth && hasManual)
     ? [
         { x: n - 1, y: lastObserved },
         ...Array.from({ length: horizon - n + 1 }, (_, i) => ({
@@ -76,7 +89,7 @@ export default function CurrentPredictChart({
       ]
     : [];
 
-  const malMax = hasManual
+  const malMax = (!showSmooth && hasManual)
     ? [
         { x: n - 1, y: lastObserved },
         ...Array.from({ length: horizon - n + 1 }, (_, i) => ({
@@ -86,7 +99,7 @@ export default function CurrentPredictChart({
       ]
     : [];
 
-  const malMin = hasManual
+  const malMin = (!showSmooth && hasManual)
     ? [
         { x: n - 1, y: lastObserved },
         ...Array.from({ length: horizon - n + 1 }, (_, i) => ({
@@ -96,9 +109,16 @@ export default function CurrentPredictChart({
       ]
     : [];
 
-  // --- Single merged dose dataset ---
-  // Past doses:   weeks 0..n-2  at x = 0.5, 1.5, …, n-1.5  (green)
-  // Future doses: weeks n-1..horizon-1 at x = n-0.5, …, horizon-0.5 (pink)
+  // --- Smooth band mode: full-horizon trajectory (UEFM / WMFT) ---
+  const smoothMain  = showSmooth ? smoothBand!.mean.map((y, w) => ({ x: w, y })) : [];
+  const smoothUpper = showSmooth ? smoothBand!.p95.map((y, w)  => ({ x: w, y })) : [];
+  const smoothLower = showSmooth ? smoothBand!.p05.map((y, w)  => ({ x: w, y })) : [];
+
+  const yAxisMax = showSmooth
+    ? Math.ceil(Math.max(...smoothBand!.p95.filter(isFinite)) * 1.1) || 10
+    : 5;
+
+  // --- Dose bars ---
   const xMax = horizon;
   const dosePoints: { x: number; y: number | null }[] = [];
   const doseColors: string[] = [];
@@ -117,11 +137,9 @@ export default function CurrentPredictChart({
     scales: {
       x: {
         type: "linear",
-        // Small padding so MAL(0) at x=0 and last bar aren't clipped
         min: -0.5,
         max: xMax + 0.5,
         title: { display: true, text: "Treatment Week" },
-        // Place ticks at dose bar centres (0.5, 1.5, …) so labels align with bars
         afterBuildTicks: (axis: any) => {
           axis.ticks = Array.from({ length: xMax }, (_, i) => ({ value: i + 0.5 }));
         },
@@ -133,10 +151,10 @@ export default function CurrentPredictChart({
         type: "linear",
         display: true,
         position: "left",
-        title: { display: true, text: "MAL Score" },
+        title: { display: true, text: yLabel },
         min: 0,
-        max: 5,
-        ticks: { stepSize: 1 },
+        max: yAxisMax,
+        ticks: showSmooth ? { maxTicksLimit: 8 } : { stepSize: 1 },
       },
       "y-right": {
         type: "linear",
@@ -151,10 +169,7 @@ export default function CurrentPredictChart({
     plugins: {
       legend: {
         labels: {
-          filter: (legendItem) =>
-            !["Manual Schedule Max Outcome", "Manual Schedule Min Outcome"].includes(
-              legendItem.text
-            ),
+          filter: (legendItem) => !hiddenLegend.includes(legendItem.text),
           boxWidth: 16,
           padding: 12,
           font: { size: 12 },
@@ -177,66 +192,104 @@ export default function CurrentPredictChart({
 
   const chartData = {
     datasets: [
-      // Observed MAL — solid blue line, points at left edge of each week column
-      {
-        type: "line" as const,
-        label: "Observed Outcome",
-        borderColor: "rgb(30, 90, 200)",
-        backgroundColor: "rgba(30, 90, 200, 0.1)",
-        borderWidth: 2,
-        pointRadius: 4,
-        pointHoverRadius: 6,
-        pointBackgroundColor: "rgb(30, 90, 200)",
-        tension: 0,
-        yAxisID: "y-left",
-        fill: false,
-        data: malObserved,
-      },
-
-      // Manual prediction + confidence band
-      ...(hasManual
+      // --- Smooth band mode (UEFM / WMFT) ---
+      ...(showSmooth
         ? [
             {
               type: "line" as const,
-              label: "Manual Schedule Prediction",
-              borderColor: "rgb(100, 160, 240)",
-              backgroundColor: "rgba(100, 160, 240, 0.1)",
-              borderWidth: 1.5,
-              borderDash: [5, 5],
-              pointRadius: 3,
-              pointHoverRadius: 5,
-              pointBackgroundColor: "rgb(100, 160, 240)",
+              label: `${metric} Mean Trajectory`,
+              borderColor: "rgb(30, 90, 200)",
+              backgroundColor: "rgba(30, 90, 200, 0.1)",
+              borderWidth: 2,
+              pointRadius: 4,
+              pointHoverRadius: 6,
+              pointBackgroundColor: "rgb(30, 90, 200)",
               tension: 0,
               yAxisID: "y-left",
               fill: false,
-              data: malPredicted,
+              data: smoothMain,
             },
             {
               type: "line" as const,
-              label: "Manual Schedule Max Outcome",
-              backgroundColor: "rgba(100, 160, 240, 0.15)",
-              borderColor: "rgba(100, 160, 240, 0)",
+              label: smoothBandUpperLabel,
+              borderColor: "rgba(30, 90, 200, 0)",
+              backgroundColor: "rgba(30, 90, 200, 0.12)",
               pointRadius: 0,
               pointHoverRadius: 0,
               yAxisID: "y-left",
-              data: malMax,
+              data: smoothUpper,
             },
             {
               type: "line" as const,
-              label: "Manual Schedule Min Outcome",
-              backgroundColor: "rgba(100, 160, 240, 0.15)",
-              borderColor: "rgba(100, 160, 240, 0)",
+              label: smoothBandLowerLabel,
+              borderColor: "rgba(30, 90, 200, 0)",
+              backgroundColor: "rgba(30, 90, 200, 0.12)",
               pointRadius: 0,
               pointHoverRadius: 0,
               yAxisID: "y-left",
               fill: "-1",
-              data: malMin,
+              data: smoothLower,
             },
           ]
-        : []),
+        : [
+            // --- MAL mode: observed + optional manual prediction ---
+            {
+              type: "line" as const,
+              label: "Observed Outcome",
+              borderColor: "rgb(30, 90, 200)",
+              backgroundColor: "rgba(30, 90, 200, 0.1)",
+              borderWidth: 2,
+              pointRadius: 4,
+              pointHoverRadius: 6,
+              pointBackgroundColor: "rgb(30, 90, 200)",
+              tension: 0,
+              yAxisID: "y-left",
+              fill: false,
+              data: malObserved,
+            },
+            ...(hasManual
+              ? [
+                  {
+                    type: "line" as const,
+                    label: "Manual Schedule Prediction",
+                    borderColor: "rgb(100, 160, 240)",
+                    backgroundColor: "rgba(100, 160, 240, 0.1)",
+                    borderWidth: 1.5,
+                    borderDash: [5, 5],
+                    pointRadius: 3,
+                    pointHoverRadius: 5,
+                    pointBackgroundColor: "rgb(100, 160, 240)",
+                    tension: 0,
+                    yAxisID: "y-left",
+                    fill: false,
+                    data: malPredicted,
+                  },
+                  {
+                    type: "line" as const,
+                    label: "Manual Schedule Max Outcome",
+                    backgroundColor: "rgba(100, 160, 240, 0.15)",
+                    borderColor: "rgba(100, 160, 240, 0)",
+                    pointRadius: 0,
+                    pointHoverRadius: 0,
+                    yAxisID: "y-left",
+                    data: malMax,
+                  },
+                  {
+                    type: "line" as const,
+                    label: "Manual Schedule Min Outcome",
+                    backgroundColor: "rgba(100, 160, 240, 0.15)",
+                    borderColor: "rgba(100, 160, 240, 0)",
+                    pointRadius: 0,
+                    pointHoverRadius: 0,
+                    yAxisID: "y-left",
+                    fill: "-1",
+                    data: malMin,
+                  },
+                ]
+              : []),
+          ]),
 
-      // Dose bars — single dataset, centered in each week's column
-      // Dark green = past dose, light green = future dose
+      // --- Dose bars (always shown) ---
       {
         type: "bar" as const,
         label: "Dose Schedule",
