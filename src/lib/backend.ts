@@ -26,7 +26,13 @@ export interface BackendPatient {
   horizon_weeks: number;
   treatment_start_week: number;
   n_treatment_weeks: number;
-  observations: Array<{ week: number; dose_hours: number; mal_score: number | null }>;
+  observations: Array<{
+    week: number;
+    dose_hours: number;
+    mal_score: number | null;
+    uefm_score?: number | null;
+    wmft_score?: number | null;
+  }>;
 }
 
 export interface BackendModelResponse {
@@ -74,6 +80,8 @@ export function toFrontendPatient(p: BackendPatient): Patient {
     outcomes: [],
     actions: [],
     observedMal: [],
+    observedUefm: [],
+    observedWmft: [],
     modelBayesian: { modelAlias: p.id, modelUri: `backend://${p.id}` },
     modelSGLD:     { modelAlias: p.id, modelUri: `backend://${p.id}` },
   };
@@ -101,6 +109,8 @@ export function enrichWithTrajectory(
     // Past patients: show full predicted trajectory over the actual dose schedule
     const actions = new Array<number>(horizonWeeks).fill(0);
     const observedMal = new Array<number | null>(horizonWeeks + 1).fill(null);
+    const observedUefm = new Array<number | null>(horizonWeeks + 1).fill(null);
+    const observedWmft = new Array<number | null>(horizonWeeks + 1).fill(null);
     for (const obs of detail.observations) {
       if (obs.week >= 0 && obs.week < horizonWeeks) {
         actions[obs.week] = obs.dose_hours;
@@ -108,11 +118,17 @@ export function enrichWithTrajectory(
       if (obs.mal_score !== null && obs.week >= 0 && obs.week <= horizonWeeks) {
         observedMal[obs.week] = obs.mal_score;
       }
+      if (obs.uefm_score != null && obs.week >= 0 && obs.week <= horizonWeeks) {
+        observedUefm[obs.week] = obs.uefm_score;
+      }
+      if (obs.wmft_score != null && obs.week >= 0 && obs.week <= horizonWeeks) {
+        observedWmft[obs.week] = obs.wmft_score;
+      }
     }
     const outcomes = model.trajectories.mal.mean
       .slice(0, horizonWeeks + 1)
       .map(x => x * scale);
-    return { ...patient, outcomes, actions, observedMal };
+    return { ...patient, outcomes, actions, observedMal, observedUefm, observedWmft };
   }
 
   // Active patients: only include weeks with an actual MAL score recorded

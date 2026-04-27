@@ -44,12 +44,15 @@ interface SmoothBand {
 }
 
 interface ChartProps {
-  pastAvgOut: number[];
+  pastAvgOut: (number | null)[];
   pastDoseData: number[];
   manualPrediction: ModelPrediction;
   horizon: number;
   smoothBand?: SmoothBand;
   yLabel?: string;
+  yMax?: number;
+  doseBarPercentage?: number;
+  doseBarThickness?: number;
 }
 
 const MAL_HIDDEN = ["Manual Schedule Max Outcome", "Manual Schedule Min Outcome"];
@@ -63,6 +66,9 @@ export default function CurrentPredictChart({
   horizon,
   smoothBand,
   yLabel = "MAL Score",
+  yMax,
+  doseBarPercentage = 0.6,
+  doseBarThickness,
 }: ChartProps) {
   const showSmooth = !!(smoothBand?.mean?.length);
   // Short metric name for labels, e.g. "UEFM Score" → "UEFM"
@@ -71,16 +77,20 @@ export default function CurrentPredictChart({
   const smoothBandLowerLabel = `${metric} 5th Percentile`;
   const hiddenLegend = [...MAL_HIDDEN, smoothBandUpperLabel, smoothBandLowerLabel];
 
-  if (!showSmooth && (!pastAvgOut || pastAvgOut.length === 0)) {
+  const hasObservedOutcome = pastAvgOut?.some((y) => y != null && Number.isFinite(y));
+
+  if (!showSmooth && !hasObservedOutcome) {
     return <p className="mt-20 mb-80 text-center text-[var(--color-warning)]">Please upload patient data for visualization.</p>;
   }
 
   const n = pastAvgOut.length;
   const hasManual = manualPrediction.futureAvgOut.length > 0;
-  const lastObserved = pastAvgOut.at(-1) ?? 0;
+  const lastObserved = [...pastAvgOut].reverse().find((y) => y != null && Number.isFinite(y)) ?? 0;
 
   // --- MAL mode: observed line + optional prediction band ---
-  const malObserved = pastAvgOut.map((y, w) => ({ x: w, y }));
+  const malObserved = pastAvgOut
+    .map((y, w) => (y != null && Number.isFinite(y) ? { x: w, y } : null))
+    .filter((point): point is { x: number; y: number } => point !== null);
 
   const malPredicted = (!showSmooth && hasManual)
     ? [
@@ -119,14 +129,14 @@ export default function CurrentPredictChart({
 
   const yAxisMax = showSmooth
     ? Math.ceil(Math.max(...smoothBand!.p95.filter(isFinite)) * 1.1) || 10
-    : 5;
+    : (yMax ?? 5);
 
   // --- Dose bars ---
-  const xMax = horizon;
+  const xMax = Math.max(horizon, pastDoseData.length);
   const dosePoints: { x: number; y: number | null }[] = [];
   const doseColors: string[] = [];
   for (let w = 0; w < xMax; w++) {
-    const isPast = w < n - 1;
+    const isPast = hasManual ? w < n - 1 : w < pastDoseData.length;
     dosePoints.push({
       x: w + 0.5,
       y: isPast
@@ -135,6 +145,11 @@ export default function CurrentPredictChart({
     });
     doseColors.push(isPast ? "rgb(34, 139, 34)" : "rgba(134, 210, 134, 0.8)");
   }
+
+  const maxDose = dosePoints.reduce((max, point) => {
+    return point.y != null && Number.isFinite(point.y) ? Math.max(max, point.y) : max;
+  }, 0);
+  const yRightMax = Math.ceil(maxDose * 2) || 12;
 
   const options: ChartOptions<"line" | "bar"> = {
     scales: {
@@ -157,7 +172,9 @@ export default function CurrentPredictChart({
         title: { display: true, text: yLabel },
         min: 0,
         max: yAxisMax,
-        ticks: showSmooth ? { maxTicksLimit: 8 } : { stepSize: 1 },
+        ticks: showSmooth
+          ? { maxTicksLimit: 8 }
+          : { maxTicksLimit: 8, ...(yAxisMax <= 5 ? { stepSize: 1 } : {}) },
       },
       "y-right": {
         type: "linear",
@@ -165,7 +182,7 @@ export default function CurrentPredictChart({
         position: "right",
         title: { display: true, text: "Treatment Hours" },
         min: 0,
-        max: 12,
+        max: yRightMax,
         grid: { drawOnChartArea: false },
       },
     },
@@ -240,7 +257,7 @@ export default function CurrentPredictChart({
             // --- MAL mode: observed + optional manual prediction ---
             {
               type: "line" as const,
-              label: "Observed Outcome",
+              label: `Observed ${metric}`,
               borderColor: "rgb(30, 90, 200)",
               backgroundColor: "rgba(30, 90, 200, 0.1)",
               borderWidth: 2,
@@ -302,7 +319,8 @@ export default function CurrentPredictChart({
         borderColor: "white",
         borderWidth: 1,
         yAxisID: "y-right",
-        barPercentage: 0.6,
+        barPercentage: doseBarPercentage,
+        ...(doseBarThickness != null ? { barThickness: doseBarThickness } : {}),
         data: dosePoints,
       },
     ],

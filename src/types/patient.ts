@@ -17,6 +17,9 @@ export interface Patient {
     actions: number[];
     // Sparse observed MAL scores for past patients (null = no observation that week, 0-5 scale)
     observedMal: (number | null)[];
+    // Sparse secondary outcome scores for past patients.
+    observedUefm?: (number | null)[];
+    observedWmft?: (number | null)[];
 
     // Created on registering model with mlflow.
     id: string;

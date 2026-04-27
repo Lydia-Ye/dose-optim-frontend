@@ -1,8 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import PredictChart from "@/components/PredictChart";
-import type { ChartData } from 'chart.js';
+import CurrentPredictChart from "@/components/CurrentPredictChart";
 import { Patient } from "@/types/patient";
 import Badge from "./ui/Badge";
 import Button from "./ui/Button";
@@ -14,49 +13,20 @@ interface PatientPageProps {
 
 export default function PastPatientPage({ patient }: PatientPageProps) {
   const [showInfoModal, setShowInfoModal] = useState(false);
+  const [metricTab, setMetricTab] = useState<"MAL" | "UEFM" | "WMFT">("MAL");
 
-  // Build chart datasets
-  const outcomes    = patient.outcomes    ?? [];
-  const actions     = patient.actions     ?? [];
+  const actions = patient.actions ?? [];
   const observedMal = patient.observedMal ?? [];
+  const observedUefm = patient.observedUefm ?? [];
+  const observedWmft = patient.observedWmft ?? [];
+  const outcomes = patient.outcomes ?? [];
 
   // Adaptive x-axis: end at the last week that has actual data
-  const lastMalWeek  = observedMal.reduce<number>((max, v, i) => v !== null ? i : max, -1);
+  const lastMalWeek = observedMal.reduce<number>((max, v, i) => v !== null ? i : max, -1);
+  const lastUefmWeek = observedUefm.reduce<number>((max, v, i) => v !== null ? i : max, -1);
+  const lastWmftWeek = observedWmft.reduce<number>((max, v, i) => v !== null ? i : max, -1);
   const lastDoseWeek = actions.reduce((max, v, i) => v > 0 ? i : max, -1);
-  const maxWeek = Math.max(lastMalWeek, lastDoseWeek, 0);
-
-  const labels = Array.from({ length: maxWeek + 1 }, (_, i) => `Week ${i + 1}`);
-
-  const scatterPoints = observedMal
-    .map((v, i) => v !== null ? { x: i, y: v } : null)
-    .filter((p): p is { x: number; y: number } => p !== null);
-
-  const datasets: object[] = [
-    {
-      type: "line" as const,
-      label: "Observed MAL",
-      backgroundColor: "rgba(30, 90, 200, 0.1)",
-      borderColor: "rgb(30, 90, 200)",
-      pointBackgroundColor: "rgb(30, 90, 200)",
-      pointRadius: 5,
-      pointHoverRadius: 7,
-      pointStyle: "circle",
-      fill: false,
-      tension: 0,
-      yAxisID: "y-left",
-      data: scatterPoints,
-    },
-    {
-      type: "bar" as const,
-      label: "Actual Treatment Hours",
-      backgroundColor: "rgb(34, 139, 34)",
-      borderColor: "white",
-      yAxisID: "y-right",
-      data: actions.slice(0, maxWeek + 1),
-    },
-  ];
-
-  const chartData = { labels, datasets } as ChartData<"line" | "bar">;
+  const maxWeek = Math.max(lastMalWeek, lastUefmWeek, lastWmftWeek, lastDoseWeek, 0);
 
   const totalDose = actions.reduce((a, b) => a + b, 0);
   const lastObserved = [...observedMal].reverse().find(v => v !== null) ?? null;
@@ -65,6 +35,26 @@ export default function PastPatientPage({ patient }: PatientPageProps) {
     : outcomes.length > 0
       ? Math.round(outcomes[outcomes.length - 1] * 1000) / 1000
       : 0;
+  const emptyPrediction = { maxOut: [], futureAvgOut: [], minOut: [], futureDoseData: [] };
+  const metricData = {
+    MAL: {
+      values: observedMal,
+      yLabel: "MAL Score",
+      yMax: 5,
+    },
+    UEFM: {
+      values: observedUefm,
+      yLabel: "UEFM Score",
+      yMax: 66,
+    },
+    WMFT: {
+      values: observedWmft,
+      yLabel: "WMFT Score",
+      yMax: 1,
+    },
+  }[metricTab];
+  const hasMetricData = metricData.values.some(v => v !== null);
+  const doseBarThickness = maxWeek > 60 ? 5 : undefined;
 
   return (
     <>
@@ -93,7 +83,7 @@ export default function PastPatientPage({ patient }: PatientPageProps) {
           </Button>
 
           <div className="border-t border-[var(--color-border)] pt-4 text-sm text-gray-500">
-            <p>Historical trial data. Blue line = observed MAL scores.</p>
+            <p>Historical trial data. Use the tabs to compare observed outcome scores.</p>
           </div>
 
           <Link href="/patient">
@@ -103,7 +93,40 @@ export default function PastPatientPage({ patient }: PatientPageProps) {
 
         {/* Right Column */}
         <div className="w-full space-y-6 mt-8">
-          <PredictChart data={chartData} />
+          <div className="flex">
+            <div className="inline-flex bg-gray-100 rounded-lg p-1 gap-1">
+              {(["MAL", "UEFM", "WMFT"] as const).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setMetricTab(m)}
+                  className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-all ${
+                    metricTab === m
+                      ? "bg-white text-[var(--color-primary)] shadow-sm"
+                      : "text-gray-500 hover:text-gray-700"
+                  }`}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {hasMetricData ? (
+            <CurrentPredictChart
+              pastAvgOut={metricData.values.slice(0, maxWeek + 1)}
+              pastDoseData={actions.slice(0, maxWeek + 1)}
+              manualPrediction={emptyPrediction}
+              horizon={maxWeek + 1}
+              yLabel={metricData.yLabel}
+              yMax={metricData.yMax}
+              doseBarPercentage={0.9}
+              doseBarThickness={doseBarThickness}
+            />
+          ) : (
+            <p className="text-sm text-gray-400 text-center py-24">
+              No observed {metricTab} data is available for this patient.
+            </p>
+          )}
 
           {/* Previous/Next Patient Navigation */}
           {/* <div className="flex justify-between items-center">
