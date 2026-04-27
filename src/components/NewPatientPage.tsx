@@ -186,7 +186,7 @@ export default function NewPatientPage({ patient, setPatient }: PatientPageProps
           </div>
 
           <div className="text-sm text-gray-600 space-y-3">
-            <p><strong>Total Treatment Weeks:</strong> {patient.horizon * 2} weeks</p>
+            <p><strong>Total Treatment Weeks:</strong> {patient.horizon} weeks</p>
             <p><strong>Total Treatment Hours:</strong> {totalDose} hours</p>
             <p><strong>Remaining Treatment Hours:</strong> {patient.budget - totalDose} hours</p>
             <p><strong>Latest observed MAL Score:</strong> {currentMAL}</p>

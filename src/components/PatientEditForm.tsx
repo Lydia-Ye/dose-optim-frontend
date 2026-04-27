@@ -19,7 +19,7 @@ export default function PatientEditForm({ patient, setPatient, setShowForm }: Pa
     const [weeksSinceStroke, setWeeksSinceStroke] = useState(patient.weeksSinceStroke);
     const [leftStroke, setLeftStroke] = useState(patient.leftStroke);
     const [male, setMale] = useState(patient.male);
-    const [horizonWeeks, setHorizonWeeks] = useState(patient.horizon * 2);
+    const [horizonWeeks, setHorizonWeeks] = useState(patient.horizon);
     const [loading, setLoading] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [progress, setProgress] = useState(0);
@@ -66,7 +66,7 @@ export default function PatientEditForm({ patient, setPatient, setShowForm }: Pa
                 initOutcome: patient.outcomes[patient.outcomes.length - 1],
                 budget: budget,
                 maxDose: maxDose,
-                horizon: horizonWeeks / 2,
+                horizon: horizonWeeks,
                 context: {
                     age: age,
                     weeksSinceStroke: weeksSinceStroke,
@@ -99,7 +99,7 @@ export default function PatientEditForm({ patient, setPatient, setShowForm }: Pa
                 weeksSinceStroke: weeksSinceStroke,
                 leftStroke: leftStroke,
                 male: male,
-                horizon: horizonWeeks / 2, // Convert back to original format
+                horizon: horizonWeeks, // Convert back to original format
                 modelBayesian: data.patient.modelBayesian,
                 modelSGLD: data.patient.modelSGLD
             };
@@ -145,7 +145,7 @@ export default function PatientEditForm({ patient, setPatient, setShowForm }: Pa
                                     setWeeksSinceStroke(patient.weeksSinceStroke);
                                     setLeftStroke(patient.leftStroke);
                                     setMale(patient.male);
-                                    setHorizonWeeks(patient.horizon * 2);
+                                    setHorizonWeeks(patient.horizon);
                                 }}
                             >
                                 Cancel

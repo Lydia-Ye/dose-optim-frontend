@@ -224,7 +224,7 @@ export default function ManualScheduleForm({
             </div>
           </div>
           <div className="text-sm text-gray-500 mt-2">
-            Max Dose: {maxDose} hours | Horizon: {horizon * 2} weeks
+            Max Dose: {maxDose} hours | Horizon: {horizon} weeks
           </div>
         </div>
         {/* Right: Quick Presets Panel */}
