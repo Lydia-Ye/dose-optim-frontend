@@ -54,6 +54,10 @@ export default function NewPatientPage({ patient, setPatient }: PatientPageProps
   const [pastDoseData, setPastDoseData] = useState<number[]>(patient.actions ?? []);
 
   const [manualPrediction, setManualPrediction] = useState<ModelPrediction>(emptyPrediction);
+  const [cemPrediction, setCemPrediction] = useState<ModelPrediction>(emptyPrediction);
+  const [cemSchedule, setCemSchedule] = useState<number[]>([]);
+  const [cemLoading, setCemLoading] = useState(false);
+  const [cemError, setCemError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"timeline" | "detail">("timeline");
   const [metricTab, setMetricTab] = useState<"MAL" | "UEFM" | "WMFT">("MAL");
 
@@ -115,6 +119,42 @@ export default function NewPatientPage({ patient, setPatient }: PatientPageProps
       setShowManual(false);
     }
   };
+
+  const handleRunCem = useCallback(async () => {
+    setCemLoading(true);
+    setCemError(null);
+    try {
+      const res = await fetch("/api/optimize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: patient.id }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `Optimization failed (${res.status})`);
+      }
+      const data = await res.json();
+      setCemSchedule(data.scheduleHours);
+      setCemPrediction({
+        maxOut: data.maxPrediction,
+        futureAvgOut: data.meanPrediction,
+        minOut: data.minPrediction,
+        futureDoseData: data.dosage,
+        malSmooth:  data.malSmooth,
+        uefmSmooth: data.uefmSmooth,
+        wmftSmooth: data.wmftSmooth,
+        mal:        data.mal,
+        uefm:       data.uefm,
+        wmft:       data.wmft,
+        s:          data.s,
+        rM:         data.rM,
+      });
+    } catch (err) {
+      setCemError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCemLoading(false);
+    }
+  }, [patient.id]);
 
   const totalDose = pastDoseData.reduce((a, b) => a + b, 0);
   const currentMAL = Math.round(pastAvgOut[pastAvgOut.length - 1] * 1000) / 1000;
@@ -264,6 +304,41 @@ export default function NewPatientPage({ patient, setPatient }: PatientPageProps
                   </div>
                 </div>
               </label>
+              <label className="inline-flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={cemSchedule.length > 0}
+                  onChange={(e) => {
+                    if (!hasPastData) return;
+                    if (e.target.checked) {
+                      handleRunCem();
+                    } else {
+                      setCemPrediction(emptyPrediction);
+                      setCemSchedule([]);
+                    }
+                  }}
+                  className="form-checkbox text-green-600"
+                  disabled={cemLoading || !hasPastData}
+                />
+                <span className="text-sm text-gray-700">
+                  {cemLoading ? "Optimising…" : "Optimal Schedule (CEM)"}
+                </span>
+                <div className="relative group">
+                  <span className="text-gray-400 cursor-help">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <line x1="12" y1="16" x2="12" y2="12"></line>
+                      <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                    </svg>
+                  </span>
+                  <div className="absolute left-full top-1/2 transform -translate-y-1/2 ml-2 w-64 p-2 bg-[var(--foreground)]/50 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-50 pointer-events-none">
+                    Uses the Cross-Entropy Method to find the dose schedule that maximises expected MAL/UEFM/WMFT improvement within the patient&apos;s budget.
+                  </div>
+                </div>
+              </label>
+              {cemError && (
+                <p className="text-xs text-red-500 pl-6">{cemError}</p>
+              )}
             </div>
           </div>
 
@@ -335,9 +410,9 @@ export default function NewPatientPage({ patient, setPatient }: PatientPageProps
                 </div>
               </div>
 
-              {metricTab !== "MAL" && !manualPrediction.uefmSmooth?.mean?.length ? (
+              {metricTab !== "MAL" && !manualPrediction.uefmSmooth?.mean?.length && !cemPrediction.uefmSmooth?.mean?.length ? (
                 <p className="text-sm text-gray-400 text-center py-24">
-                  Run a manual schedule prediction to view the {metricTab} trajectory.
+                  Run a manual schedule or optimal CEM prediction to view the {metricTab} trajectory.
                 </p>
               ) : (
                 <CurrentPredictChart
@@ -349,6 +424,14 @@ export default function NewPatientPage({ patient, setPatient }: PatientPageProps
                     metricTab === "UEFM" ? manualPrediction.uefmSmooth :
                     metricTab === "WMFT" ? manualPrediction.wmftSmooth :
                     undefined
+                  }
+                  cemPrediction={cemPrediction.futureAvgOut.length > 0 ? cemPrediction : undefined}
+                  cemSmoothBand={
+                    cemPrediction.futureAvgOut.length > 0
+                      ? metricTab === "UEFM" ? cemPrediction.uefmSmooth
+                        : metricTab === "WMFT" ? cemPrediction.wmftSmooth
+                        : undefined
+                      : undefined
                   }
                   yLabel={
                     metricTab === "UEFM" ? "UEFM Score" :
