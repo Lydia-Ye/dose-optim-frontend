@@ -23,7 +23,7 @@ export default function PatientPage({ params }: PatientPageProps) {
   const [loading, setLoading] = useState(true);
   
   useEffect(() => {
-    fetch(`/api/patients/${id}`)
+    fetch(`/api/patients/${id}`, { cache: "no-store" })
       .then((res) => {
         if (res.status === 404) return notFound();
         return res.json();

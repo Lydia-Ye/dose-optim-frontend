@@ -9,6 +9,9 @@ import {
   BACKEND_URL,
 } from "@/lib/backend";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -23,7 +26,11 @@ export async function GET(
       { n_samples: 200 }
     );
 
-    return NextResponse.json(enrichWithTrajectory(base, detail, model));
+    return NextResponse.json(enrichWithTrajectory(base, detail, model), {
+      headers: {
+        "Cache-Control": "no-store, max-age=0",
+      },
+    });
   } catch (error) {
     console.error(error);
     return NextResponse.json({ error: "Failed to fetch patient" }, { status: 500 });

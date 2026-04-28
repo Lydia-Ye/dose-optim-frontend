@@ -18,6 +18,7 @@ export async function PUT(req: Request) {
         max_dose_per_week: current.max_dose_per_week,
         age_standardized: current.age_standardized,
         weeks_since_stroke: current.weeks_since_stroke,
+        n_treatment_weeks: data.newHorizon,
         horizon_weeks: data.newHorizon,
       }),
       cache: "no-store",

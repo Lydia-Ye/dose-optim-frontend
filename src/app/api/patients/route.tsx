@@ -18,6 +18,8 @@ export async function POST(req: Request) {
     const backendBody = {
       name: data.name,
       age_standardized: (data.age - 18) / 75,
+      left_stroke: data.leftStroke,
+      male: data.male,
       concurrent_therapy: false,
       budget_hours: data.budget,
       max_dose_per_week: data.maxDose,
@@ -46,7 +48,10 @@ export async function PUT(req: Request) {
       budget_hours: data.budget,
       max_dose_per_week: data.maxDose,
       age_standardized: (data.context?.age - 18) / 75,
+      left_stroke: data.context?.leftStroke,
+      male: data.context?.male,
       weeks_since_stroke: data.context?.weeksSinceStroke ?? 0,
+      n_treatment_weeks: data.horizon,
       horizon_weeks: data.horizon,
     };
 
