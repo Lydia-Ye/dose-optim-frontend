@@ -5,7 +5,7 @@
  * Never import this in client components.
  */
 
-import { Patient } from "@/types/patient";
+import { Patient, PatientPred } from "@/types/patient";
 
 export const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:8000";
 
@@ -128,7 +128,29 @@ export function enrichWithTrajectory(
     const outcomes = model.trajectories.mal.mean
       .slice(0, horizonWeeks + 1)
       .map(x => x * scale);
-    return { ...patient, outcomes, actions, observedMal, observedUefm, observedWmft };
+
+    const malScale  = model.trajectories.mal.scale;   // 5.0
+    const uefmScale = model.trajectories.uefm.scale;  // 66.0
+    const wmftScale = model.trajectories.wmft.scale;  // 1.0
+
+    const makeBand = (
+      traj: { mean: number[]; p05: number[]; p95: number[] },
+      s: number,
+    ) => ({
+      median: traj.mean.map(x => x * s),
+      lower:  traj.p05.map(x  => x * s),
+      upper:  traj.p95.map(x  => x * s),
+    });
+
+    const pred: PatientPred = {
+      mal:     makeBand(model.latent_trajectories.mal,  malScale),
+      uefm:    makeBand(model.latent_trajectories.uefm, uefmScale),
+      wmft:    makeBand(model.latent_trajectories.wmft, wmftScale),
+      latentS: model.latent_states.s.mean,
+      latentR: model.latent_states.r_m.mean,
+    };
+
+    return { ...patient, outcomes, actions, observedMal, observedUefm, observedWmft, pred };
   }
 
   // Active patients: only include weeks with an actual MAL score recorded
