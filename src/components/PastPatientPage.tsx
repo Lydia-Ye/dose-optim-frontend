@@ -1,60 +1,69 @@
 "use client";
 
 import Link from "next/link";
-import CurrentPredictChart from "@/components/CurrentPredictChart";
+import PastPatientChart, { PlotRow, ObsRow } from "@/components/PastPatientChart";
 import { Patient } from "@/types/patient";
 import Badge from "./ui/Badge";
 import Button from "./ui/Button";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface PatientPageProps {
   patient: Patient;
 }
 
+interface SubjectPlotData {
+  subject:  number;
+  expgroup: number | null;
+  uefm: { pred: PlotRow[]; obs: ObsRow[] };
+  mal:  { pred: PlotRow[]; obs: ObsRow[] };
+  wmft: { pred: PlotRow[]; obs: ObsRow[] };
+}
+
+const METRIC_CONFIG = {
+  MAL:  { yLabel: "MAL Score",  yMax: 5  },
+  UEFM: { yLabel: "UEFM Score", yMax: 66 },
+  WMFT: { yLabel: "WMFT Score", yMax: 1  },
+} as const;
+
 export default function PastPatientPage({ patient }: PatientPageProps) {
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [metricTab, setMetricTab] = useState<"MAL" | "UEFM" | "WMFT">("MAL");
+  const [plotData, setPlotData]   = useState<SubjectPlotData | null>(null);
 
-  const actions = patient.actions ?? [];
-  const observedMal = patient.observedMal ?? [];
+  const actions      = patient.actions ?? [];
+  const observedMal  = patient.observedMal ?? [];
   const observedUefm = patient.observedUefm ?? [];
   const observedWmft = patient.observedWmft ?? [];
-  const outcomes = patient.outcomes ?? [];
+  const outcomes     = patient.outcomes ?? [];
 
-  // Adaptive x-axis: end at the last week that has actual data
-  const lastMalWeek = observedMal.reduce<number>((max, v, i) => v !== null ? i : max, -1);
+  // Fetch pre-computed plot data for this past patient
+  useEffect(() => {
+    if (!patient.sourceSubjectId) return;
+    fetch(`/api/past-patient-plots/${patient.sourceSubjectId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: SubjectPlotData | null) => setPlotData(data))
+      .catch(() => setPlotData(null));
+  }, [patient.sourceSubjectId]);
+
+  // Adaptive x-axis: end at the last week with actual data
+  const lastMalWeek  = observedMal.reduce<number>((max, v, i) => v !== null ? i : max, -1);
   const lastUefmWeek = observedUefm.reduce<number>((max, v, i) => v !== null ? i : max, -1);
   const lastWmftWeek = observedWmft.reduce<number>((max, v, i) => v !== null ? i : max, -1);
   const lastDoseWeek = actions.reduce((max, v, i) => v > 0 ? i : max, -1);
-  const maxWeek = Math.max(lastMalWeek, lastUefmWeek, lastWmftWeek, lastDoseWeek, 0);
+  const maxWeek      = Math.max(lastMalWeek, lastUefmWeek, lastWmftWeek, lastDoseWeek, 0);
 
-  const totalDose = actions.reduce((a, b) => a + b, 0);
+  const totalDose    = actions.reduce((a, b) => a + b, 0);
   const lastObserved = [...observedMal].reverse().find(v => v !== null) ?? null;
-  const finalMAL = lastObserved !== null
+  const finalMAL     = lastObserved !== null
     ? Math.round(lastObserved * 1000) / 1000
-    : outcomes.length > 0
-      ? Math.round(outcomes[outcomes.length - 1] * 1000) / 1000
-      : 0;
-  const emptyPrediction = { maxOut: [], futureAvgOut: [], minOut: [], futureDoseData: [] };
-  const metricData = {
-    MAL: {
-      values: observedMal,
-      yLabel: "MAL Score",
-      yMax: 5,
-    },
-    UEFM: {
-      values: observedUefm,
-      yLabel: "UEFM Score",
-      yMax: 66,
-    },
-    WMFT: {
-      values: observedWmft,
-      yLabel: "WMFT Score",
-      yMax: 1,
-    },
-  }[metricTab];
-  const hasMetricData = metricData.values.some(v => v !== null);
-  const doseBarThickness = maxWeek > 60 ? 5 : undefined;
+    : outcomes.length > 0 ? Math.round(outcomes[outcomes.length - 1] * 1000) / 1000 : 0;
+
+  const modKey = metricTab.toLowerCase() as "mal" | "uefm" | "wmft";
+  const { yLabel, yMax } = METRIC_CONFIG[metricTab];
+
+  const predRows: PlotRow[] = plotData?.[modKey]?.pred ?? [];
+  const obsRows:  ObsRow[]  = plotData?.[modKey]?.obs  ?? [];
+  const hasData  = predRows.length > 0 || obsRows.length > 0;
 
   return (
     <>
@@ -74,11 +83,7 @@ export default function PastPatientPage({ patient }: PatientPageProps) {
             <p><strong>Horizon:</strong> {patient.horizon} weeks</p>
           </div>
 
-          <Button
-            className="w-56"
-            variant="secondary"
-            onClick={() => setShowInfoModal(true)}
-          >
+          <Button className="w-56" variant="secondary" onClick={() => setShowInfoModal(true)}>
             Patient Info
           </Button>
 
@@ -93,6 +98,7 @@ export default function PastPatientPage({ patient }: PatientPageProps) {
 
         {/* Right Column */}
         <div className="w-full space-y-6 mt-8">
+          {/* Metric tabs */}
           <div className="flex">
             <div className="inline-flex bg-gray-100 rounded-lg p-1 gap-1">
               {(["MAL", "UEFM", "WMFT"] as const).map((m) => (
@@ -111,37 +117,23 @@ export default function PastPatientPage({ patient }: PatientPageProps) {
             </div>
           </div>
 
-          {hasMetricData ? (
-            <CurrentPredictChart
-              pastAvgOut={metricData.values.slice(0, maxWeek + 1)}
-              pastDoseData={actions.slice(0, maxWeek + 1)}
-              manualPrediction={emptyPrediction}
-              horizon={maxWeek + 1}
-              yLabel={metricData.yLabel}
-              yMax={metricData.yMax}
-              doseBarPercentage={0.9}
-              doseBarThickness={doseBarThickness}
+          {/* Chart */}
+          {plotData === null && patient.sourceSubjectId ? (
+            <p className="text-sm text-gray-400 text-center py-24">Loading plot data…</p>
+          ) : hasData ? (
+            <PastPatientChart
+              predRows={predRows}
+              obsRows={obsRows}
+              doseData={actions.slice(0, maxWeek + 1)}
+              metric={metricTab}
+              yLabel={yLabel}
+              yMax={yMax}
             />
           ) : (
             <p className="text-sm text-gray-400 text-center py-24">
-              No observed {metricTab} data is available for this patient.
+              No {metricTab} data available for this patient.
             </p>
           )}
-
-          {/* Previous/Next Patient Navigation */}
-          {/* <div className="flex justify-between items-center">
-            {hasPreviousPatient ? (
-              <Link href={`/patient/${patients[currentPatientIndex - 1].id}`}>
-                <Button variant="outline">← Previous Patient</Button>
-              </Link>
-            ) : <div />}
-
-            {hasNextPatient ? (
-              <Link href={`/patient/${patients[currentPatientIndex + 1].id}`}>
-                <Button variant="outline">Next Patient →</Button>
-              </Link>
-            ) : <div />}
-          </div> */}
         </div>
 
         {/* Info Modal */}
@@ -155,7 +147,9 @@ export default function PastPatientPage({ patient }: PatientPageProps) {
               <div className="text-left space-y-2 mb-6">
                 <p><strong>Name:</strong> {patient.name}</p>
                 {patient.age !== undefined && <p><strong>Age (approx):</strong> {patient.age}</p>}
-                {patient.weeksSinceStroke !== undefined && <p><strong>Weeks Since Stroke:</strong> {patient.weeksSinceStroke}</p>}
+                {patient.weeksSinceStroke !== undefined && (
+                  <p><strong>Weeks Since Stroke:</strong> {patient.weeksSinceStroke}</p>
+                )}
                 <p><strong>Total Treatment Hours:</strong> {Math.round(totalDose * 10) / 10} hrs</p>
                 <p><strong>Final Observed MAL:</strong> {finalMAL} / 5</p>
                 <p><strong>Horizon:</strong> {patient.horizon} weeks</p>
