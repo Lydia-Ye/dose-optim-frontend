@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { backendGet, backendPost, toFrontendPatient, BackendPatient, BACKEND_URL } from "@/lib/backend";
+import { adaptiveNotebookPatients } from "@/lib/adaptiveNotebookPatients";
 
 export async function GET() {
   try {
     const patients = await backendGet<BackendPatient[]>("/v1/patients");
-    return NextResponse.json(patients.map(toFrontendPatient));
+    const pastPatients = patients.map(toFrontendPatient).filter((patient) => patient.past);
+    return NextResponse.json([...adaptiveNotebookPatients, ...pastPatients]);
   } catch (error) {
     console.error(error);
     return NextResponse.json({ error: "Failed to fetch patients" }, { status: 500 });

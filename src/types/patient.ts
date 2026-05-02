@@ -24,6 +24,8 @@ export interface Patient {
 
     // Fixed horizon.
     horizon: number;
+    // Max week doses can be applied (defaults to horizon when absent).
+    doseHorizon?: number;
 
     // Used to keep track of past data.
     past: boolean;

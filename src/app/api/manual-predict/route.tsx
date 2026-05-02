@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { backendPost, BackendModelResponse } from "@/lib/backend";
+import { getAdaptiveNotebookManualPredictResponse } from "@/lib/adaptiveNotebookPatients";
 
 function scaleBand(
   band: { mean: number[]; p05: number[]; p95: number[] },
@@ -15,8 +16,29 @@ function scaleBand(
 export async function POST(req: Request) {
   try {
     const data = await req.json();
-    const patientId = String(data.id);
+    const rawPatientId = data.id ?? data.patientId ?? data.patientID;
+    if (rawPatientId == null) {
+      return NextResponse.json({ error: "Missing patient id" }, { status: 400 });
+    }
+    const patientId = String(rawPatientId);
     const futureActions: number[] = data.future_actions ?? [];
+    const notebookModel = getAdaptiveNotebookManualPredictResponse(patientId, futureActions);
+    if (notebookModel) {
+      return NextResponse.json({
+        maxPrediction: notebookModel.maxPrediction,
+        minPrediction: notebookModel.minPrediction,
+        meanPrediction: notebookModel.meanPrediction,
+        dosage: notebookModel.dosage,
+        malSmooth: notebookModel.malSmooth,
+        uefmSmooth: notebookModel.uefmSmooth,
+        wmftSmooth: notebookModel.wmftSmooth,
+        mal: notebookModel.mal,
+        uefm: notebookModel.uefm,
+        wmft: notebookModel.wmft,
+        s: notebookModel.s,
+        rM: notebookModel.rM,
+      });
+    }
 
     const model = await backendPost<BackendModelResponse>(
       `/v1/patients/${patientId}/manual-predict`,

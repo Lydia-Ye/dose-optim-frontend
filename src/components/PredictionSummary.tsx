@@ -26,11 +26,12 @@ function to3dp(val: number | null | undefined): string {
 const PredictionSummary: React.FC<PredictionSummaryProps> = ({ pastAvgOut, manualPrediction, cemPrediction }) => {
   const hasManual = manualPrediction.futureAvgOut.length > 0;
   const hasCem = cemPrediction.futureAvgOut.length > 0;
-  const nextWeek = to3dp(pastAvgOut.length - 1);
-  const manualMal = hasManual ? to3dp(manualPrediction.futureAvgOut[1]) : null;
-  const manualHours = hasManual ? to3dp(manualPrediction.futureDoseData[0]) : null;
-  const cemMal = hasCem ? to3dp(cemPrediction.futureAvgOut[1]) : null;
-  const cemHours = hasCem ? to3dp(cemPrediction.futureDoseData[0]) : null;
+  const nextWeekIndex = pastAvgOut.length;
+  const nextWeek = to3dp(nextWeekIndex);
+  const manualMal = hasManual ? to3dp(manualPrediction.futureAvgOut[nextWeekIndex]) : null;
+  const manualHours = hasManual ? to3dp(manualPrediction.futureDoseData[nextWeekIndex]) : null;
+  const cemMal = hasCem ? to3dp(cemPrediction.futureAvgOut[nextWeekIndex]) : null;
+  const cemHours = hasCem ? to3dp(cemPrediction.futureDoseData[nextWeekIndex]) : null;
 
   return (
     <div className="my-6 bg-[var(--color-accent)]/10 rounded-lg p-4 shadow-sm">

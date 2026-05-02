@@ -62,14 +62,20 @@ export default function NewPatientPage({ patient, setPatient }: PatientPageProps
   const [metricTab, setMetricTab] = useState<"MAL" | "UEFM" | "WMFT">("MAL");
 
   const hasPastData = pastAvgOut.length > 0 && pastDoseData.length > 0;
+  const doseHorizon = patient.doseHorizon ?? patient.horizon;
 
   const handleManualSchedule = useCallback(async (futureActions: number[]) => {
     try {
-      // Combine observed past doses (all but the last time step, which shares
-      // a row with futureActions[0] in the form) with the future planned doses
-      // to produce a full horizon_weeks schedule for the backend.
-      const pastDoses = pastDoseData.slice(0, Math.max(0, pastAvgOut.length - 1));
-      const fullSchedule = [...pastDoses, ...futureActions];
+      // Preserve every observed dose, then append planned future doses.
+      // Cap at doseHorizon so doses beyond that week are never sent to the model.
+      const pastDoses = pastDoseData.slice(0, doseHorizon);
+      const doseSchedule = [...pastDoses, ...futureActions].slice(0, doseHorizon);
+      // Pad to full horizon so the backend receives exactly horizon_weeks elements.
+      // Weeks beyond doseHorizon are zero (no treatment), letting the model simulate natural decay.
+      const fullSchedule = [
+        ...doseSchedule,
+        ...new Array(patient.horizon - doseSchedule.length).fill(0),
+      ];
 
       const requestBody = {
         id: patient.id,
@@ -106,11 +112,33 @@ export default function NewPatientPage({ patient, setPatient }: PatientPageProps
     } catch (err) {
       console.error("Manual schedule prediction error:", err);
     }
-  }, [patient.id, pastAvgOut, pastDoseData]);
+  }, [doseHorizon, patient.horizon, patient.id, pastDoseData]);
 
-  const handleDataUpdated = (newAvgOut: number[], newDoseData: (number | null)[]) => {
+  const handleDataUpdated = (
+    newAvgOut: number[],
+    newDoseData: (number | null)[],
+    snapshotData?: {
+      observedMal: number[];
+      observedUefm: number[];
+      observedWmft: number[];
+    },
+  ) => {
     setPastAvgOut(newAvgOut);
     setPastDoseData(newDoseData as number[]);
+    setManualPrediction(emptyPrediction);
+    setCemPrediction(emptyPrediction);
+    setCemSchedule([]);
+    setShowManual(false);
+    if (snapshotData) {
+      setPatient((current) => current ? {
+        ...current,
+        outcomes: newAvgOut,
+        actions: newDoseData as number[],
+        observedMal: snapshotData.observedMal,
+        observedUefm: snapshotData.observedUefm,
+        observedWmft: snapshotData.observedWmft,
+      } : current);
+    }
   };
 
   const handleCloseManualScheduleForm = () => {
@@ -158,6 +186,15 @@ export default function NewPatientPage({ patient, setPatient }: PatientPageProps
 
   const totalDose = pastDoseData.reduce((a, b) => a + b, 0);
   const currentMAL = Math.round(pastAvgOut[pastAvgOut.length - 1] * 1000) / 1000;
+  const selectedObservedOut =
+    metricTab === "UEFM" ? (patient.observedUefm ?? []) :
+    metricTab === "WMFT" ? (patient.observedWmft ?? []) :
+    pastAvgOut;
+  const hasSelectedObservedOut = selectedObservedOut.some((value) => value != null && Number.isFinite(value));
+  const hasSelectedPrediction =
+    metricTab === "MAL" ||
+    (metricTab === "UEFM" && (!!manualPrediction.uefmSmooth?.mean?.length || !!cemPrediction.uefmSmooth?.mean?.length)) ||
+    (metricTab === "WMFT" && (!!manualPrediction.wmftSmooth?.mean?.length || !!cemPrediction.wmftSmooth?.mean?.length));
 
   return (
     <>
@@ -171,6 +208,7 @@ export default function NewPatientPage({ patient, setPatient }: PatientPageProps
               setShowForm={setShowManualScheduleForm}
               maxDose={patient.maxDose}
               horizon={patient.horizon}
+              doseHorizon={doseHorizon}
               budget={patient.budget}
               onClose={handleCloseManualScheduleForm}
             />
@@ -410,22 +448,23 @@ export default function NewPatientPage({ patient, setPatient }: PatientPageProps
                 </div>
               </div>
 
-              {metricTab !== "MAL" && !manualPrediction.uefmSmooth?.mean?.length && !cemPrediction.uefmSmooth?.mean?.length ? (
+              {!hasSelectedObservedOut && !hasSelectedPrediction ? (
                 <p className="text-sm text-gray-400 text-center py-24">
                   Run a manual schedule or optimal CEM prediction to view the {metricTab} trajectory.
                 </p>
               ) : (
                 <CurrentPredictChart
-                  pastAvgOut={pastAvgOut}
+                  pastAvgOut={selectedObservedOut}
                   pastDoseData={pastDoseData}
                   manualPrediction={manualPrediction}
                   horizon={patient.horizon}
+                  doseHorizon={doseHorizon}
                   smoothBand={
                     metricTab === "UEFM" ? manualPrediction.uefmSmooth :
                     metricTab === "WMFT" ? manualPrediction.wmftSmooth :
                     undefined
                   }
-                  cemPrediction={metricTab === "MAL" && cemPrediction.futureAvgOut.length > 0 ? cemPrediction : undefined}
+                  cemPrediction={cemPrediction.futureAvgOut.length > 0 ? cemPrediction : undefined}
                   cemSmoothBand={
                     metricTab !== "MAL" && cemPrediction.futureAvgOut.length > 0
                       ? metricTab === "UEFM" ? cemPrediction.uefmSmooth
@@ -436,6 +475,11 @@ export default function NewPatientPage({ patient, setPatient }: PatientPageProps
                     metricTab === "UEFM" ? "UEFM Score" :
                     metricTab === "WMFT" ? "WMFT Score" :
                     "MAL Score"
+                  }
+                  yMax={
+                    metricTab === "UEFM" ? 66 :
+                    metricTab === "WMFT" ? 1 :
+                    5
                   }
                 />
               )}

@@ -106,9 +106,8 @@ export default function PatientEditForm({ patient, setPatient, setShowForm }: Pa
 
             setPatient(updatedPatient);
             setIsEditing(false);
+            setShowForm(false);
             setStatusMessage("");
-            // Show success message
-            // alert("Patient information updated successfully!");
         } catch (error) {
             console.error("Error updating patient:", error);
             setStatusMessage("");

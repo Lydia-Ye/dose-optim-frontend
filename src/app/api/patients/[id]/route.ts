@@ -8,6 +8,7 @@ import {
   BackendModelResponse,
   BACKEND_URL,
 } from "@/lib/backend";
+import { getAdaptiveNotebookPatient, isAdaptiveNotebookPatient } from "@/lib/adaptiveNotebookPatients";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -18,6 +19,15 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+    const notebookPatient = getAdaptiveNotebookPatient(id);
+    if (notebookPatient) {
+      return NextResponse.json(notebookPatient, {
+        headers: {
+          "Cache-Control": "no-store, max-age=0",
+        },
+      });
+    }
+
     const detail = await backendGet<BackendPatient>(`/v1/patients/${id}`);
     const base = toFrontendPatient(detail);
 
@@ -43,6 +53,13 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
+    if (isAdaptiveNotebookPatient(id)) {
+      return NextResponse.json(
+        { error: "Notebook adaptive subjects are read-only." },
+        { status: 405 },
+      );
+    }
+
     const res = await fetch(`${BACKEND_URL}/v1/patients/${id}`, {
       method: "DELETE",
       cache: "no-store",

@@ -39,6 +39,11 @@ export interface BackendModelResponse {
   patient_id: string;
   horizon_weeks: number;
   parameter_source: string;
+  recommended_schedule: {
+    dose_hours_per_week: number[];
+    total_hours: number;
+    cem_convergence: number[];
+  } | null;
   trajectories: {
     mal:  { mean: number[]; sd: number[]; p05: number[]; p95: number[]; scale: number };
     uefm: { mean: number[]; sd: number[]; p05: number[]; p95: number[]; scale: number };

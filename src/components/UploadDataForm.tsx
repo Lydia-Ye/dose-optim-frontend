@@ -4,13 +4,26 @@ import React, { useState, useRef, useEffect} from "react";
 import Papa from "papaparse";
 import { ResultsPutRequest } from "@/types/resultsPutRequest";
 import Button from "@/components/ui/Button";
+import {
+    getAdaptiveNotebookSnapshot,
+    isAdaptiveNotebookPatient,
+    NotebookSnapshotWeek,
+} from "@/lib/adaptiveNotebookPatients";
 
 interface UploadDataFormProps {
     patientID: string;
     pastAvgOut: number[];
     pastDoseData: (number|null)[];
     setShowForm: React.Dispatch<React.SetStateAction<boolean>>;
-    onDataUpdated?: (newAvgOut: number[], newDoseData: (number|null)[]) => void;
+    onDataUpdated?: (
+        newAvgOut: number[],
+        newDoseData: (number|null)[],
+        snapshotData?: {
+            observedMal: number[];
+            observedUefm: number[];
+            observedWmft: number[];
+        },
+    ) => void;
 }
 
 export default function UploadDataForm({ patientID, pastAvgOut, pastDoseData, setShowForm, onDataUpdated }: UploadDataFormProps) {
@@ -28,6 +41,10 @@ export default function UploadDataForm({ patientID, pastAvgOut, pastDoseData, se
     const [progress, setProgress] = useState(0);
     const [statusMessage, setStatusMessage] = useState("");
     const [success, setSuccess] = useState(false);
+    const isNotebookPatient = isAdaptiveNotebookPatient(patientID);
+    const currentSnapshotWeek = ([1, 7, 13] as const).includes((pastAvgOutState.length - 1) as NotebookSnapshotWeek)
+        ? pastAvgOutState.length - 1
+        : null;
 
     useEffect(() => {
         let interval: NodeJS.Timeout | null = null;
@@ -174,6 +191,25 @@ export default function UploadDataForm({ patientID, pastAvgOut, pastDoseData, se
         setValidationError(null);
     };
 
+    const applyNotebookSnapshot = (week: NotebookSnapshotWeek) => {
+        const snapshot = getAdaptiveNotebookSnapshot(patientID, week);
+        if (!snapshot) return;
+
+        setPastAvgOutState(snapshot.outcomes);
+        setPastDoseDataState(snapshot.actions);
+        setPastDoseDataStateInputs(snapshot.actions.map(item => item === null ? "" : String(item)));
+        setValidationError(null);
+        setIsEditing(false);
+        setSuccess(true);
+        if (onDataUpdated) {
+            onDataUpdated(snapshot.outcomes, snapshot.actions, {
+                observedMal: snapshot.observedMal,
+                observedUefm: snapshot.observedUefm,
+                observedWmft: snapshot.observedWmft,
+            });
+        }
+    };
+
     // Function to finalize new update in database.
     // Called on form submission.
     const uploadData = async (e: React.FormEvent) => {
@@ -272,6 +308,27 @@ export default function UploadDataForm({ patientID, pastAvgOut, pastDoseData, se
                 {validationError && (
                     <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
                         {validationError}
+                    </div>
+                )}
+
+                {isNotebookPatient && isEditing && (
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-gray-50 border border-gray-200 rounded-lg px-4 py-3">
+                        <div className="text-sm text-gray-600">
+                            Notebook snapshot
+                        </div>
+                        <div className="flex gap-2">
+                            {([1, 7, 13] as const).map((week) => (
+                                <Button
+                                    key={week}
+                                    type="button"
+                                    variant={currentSnapshotWeek === week ? "primary" : "outline"}
+                                    onClick={() => applyNotebookSnapshot(week)}
+                                    className="!px-3 !py-1"
+                                >
+                                    Week {week}
+                                </Button>
+                            ))}
+                        </div>
                     </div>
                 )}
 
@@ -427,7 +484,7 @@ export default function UploadDataForm({ patientID, pastAvgOut, pastDoseData, se
                         <div className="w-full flex justify-center z-20">
                             <div className="max-w-lg w-full mx-auto px-6 py-3 bg-green-50 border border-green-300 rounded-lg shadow text-green-900 text-base font-semibold flex items-center gap-3 justify-center text-center">
                                 <svg className="w-5 h-5 text-green-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                                Observations saved. Model updated successfully.
+                                {isNotebookPatient ? "Notebook snapshot loaded." : "Observations saved. Model updated successfully."}
                             </div>
                         </div>
                     )}
