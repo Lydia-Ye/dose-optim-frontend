@@ -176,7 +176,7 @@ export default function PastPatientChart({
       // ── Latent s — structural recovery (cyan dashed) ─────────────────────
       {
         type:             "line" as const,
-        label:            "Latent 's'",
+        label:            "Spontaneous",
         data:             predRows.map((r) => ({ x: r.time, y: r.median_s })),
         borderColor:      LATENT_S_COLOR,
         backgroundColor:  "transparent",
@@ -191,7 +191,7 @@ export default function PastPatientChart({
       // ── Latent r — motor memory (orange dashed) ───────────────────────────
       {
         type:             "line" as const,
-        label:            "Latent 'r'",
+        label:            "Learning",
         data:             predRows.map((r) => ({ x: r.time, y: r.median_r })),
         borderColor:      LATENT_R_COLOR,
         backgroundColor:  "transparent",
