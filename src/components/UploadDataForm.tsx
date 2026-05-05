@@ -42,7 +42,7 @@ export default function UploadDataForm({ patientID, pastAvgOut, pastDoseData, se
     const [statusMessage, setStatusMessage] = useState("");
     const [success, setSuccess] = useState(false);
     const isNotebookPatient = isAdaptiveNotebookPatient(patientID);
-    const currentSnapshotWeek = ([1, 7, 13] as const).includes((pastAvgOutState.length - 1) as NotebookSnapshotWeek)
+    const currentSnapshotWeek = ([1, 7, 14, 21] as const).includes((pastAvgOutState.length - 1) as NotebookSnapshotWeek)
         ? pastAvgOutState.length - 1
         : null;
 
@@ -317,7 +317,7 @@ export default function UploadDataForm({ patientID, pastAvgOut, pastDoseData, se
                             Notebook snapshot
                         </div>
                         <div className="flex gap-2">
-                            {([1, 7, 13] as const).map((week) => (
+                            {([1, 7, 14, 21] as const).map((week) => (
                                 <Button
                                     key={week}
                                     type="button"

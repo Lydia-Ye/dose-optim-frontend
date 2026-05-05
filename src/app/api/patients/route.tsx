@@ -27,7 +27,7 @@ export async function POST(req: Request) {
       max_dose_per_week: data.maxDose,
       weeks_since_stroke: data.weeksSinceStroke ?? 0,
       treatment_start_week: 0,
-      n_treatment_weeks: data.horizon,
+      n_treatment_weeks: Math.floor(data.horizon / 2),
       horizon_weeks: data.horizon,
     };
 
@@ -53,7 +53,7 @@ export async function PUT(req: Request) {
       left_stroke: data.context?.leftStroke,
       male: data.context?.male,
       weeks_since_stroke: data.context?.weeksSinceStroke ?? 0,
-      n_treatment_weeks: data.horizon,
+      n_treatment_weeks: Math.floor(data.horizon / 2),
       horizon_weeks: data.horizon,
     };
 

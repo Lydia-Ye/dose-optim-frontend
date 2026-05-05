@@ -82,6 +82,7 @@ export function toFrontendPatient(p: BackendPatient): Patient {
     leftStroke: false,
     male: false,
     horizon: p.horizon_weeks,
+    doseHorizon: p.n_treatment_weeks,
     outcomes: [],
     actions: [],
     observedMal: [],

@@ -1,7 +1,7 @@
 import { Patient } from "@/types/patient";
 
 type Band = { mean: number[]; p05: number[]; p95: number[] };
-export type NotebookSnapshotWeek = 1 | 7 | 13;
+export type NotebookSnapshotWeek = 1 | 7 | 14 | 21;
 
 export interface NotebookOptimizeResponse {
   scheduleHours: number[];
@@ -25,72 +25,133 @@ const modelBayesian = { modelAlias: "adaptive-notebook", modelUri: "notebook://a
 const modelSGLD = { modelAlias: "adaptive-notebook", modelUri: "notebook://adaptive_scheduling" };
 const NOTEBOOK_HORIZON_WEEKS = 52;
 export const NOTEBOOK_DOSE_HORIZON_WEEKS = 26;
-const NOTEBOOK_SNAPSHOT_WEEK = 13;
+// Default snapshot: week 7 leaves meaningful remaining budget for manual scheduling demo
+const NOTEBOOK_SNAPSHOT_WEEK = 7;
 
-function band(mean: number[], width: number, min = 0, max = Number.POSITIVE_INFINITY): Band {
-  return {
-    mean,
-    p05: mean.map((value) => Math.max(min, value - width)),
-    p95: mean.map((value) => Math.min(max, value + width)),
-  };
+// ---------------------------------------------------------------------------
+// State-space dynamics from adaptive_scheduling.ipynb
+// Matches: evolve_state / simulate exactly
+// ---------------------------------------------------------------------------
+
+const DOSE_NORM = 26.62;
+const ALPHA_P = 0.85;
+const ALPHA_O = 0.750279040360377;
+const C0 = 0.0396425020286469;
+const BETA_R = 0.25721938996658;
+const BETA_F = 0.0256360652472847;
+
+interface SubjectParams {
+  sinit_n: number;
+  alpha_r: number;
+  alpha_s: number;
+  m_s_mal: number;
+  m_r_uefm: number;
+  m_s_wmft: number;
+  m_r_wmft: number;
+  cst: number;
+  proportion: number;
 }
 
-// Plateau extension helper: continue from lastVal, approaching cap over extLen weeks.
-function plateau(lastVal: number, cap: number, extLen: number): number[] {
-  return Array.from({ length: extLen }, (_, i) =>
-    Math.min(cap, lastVal + (cap - lastVal) * (1 - Math.exp(-i / 12))),
-  ).map((v) => Math.round(v * 1000) / 1000);
+// True parameters from adaptive_scheduling.ipynb (subject 1: g=0, age=52, conc=0)
+const PARAMS_S1: SubjectParams = {
+  sinit_n: 0.45655985,
+  alpha_r:  0.92007295,
+  alpha_s:  0.95898605,
+  m_s_mal:  0.43661443,
+  m_r_uefm: 0.12808793,
+  m_s_wmft: 0.80793006,
+  m_r_wmft: 0.29811979,
+  cst:       1.33735547,
+  proportion: 0.21404407,
+};
+
+// True parameters from adaptive_scheduling.ipynb (subject 2: g=1, age=60, conc=1)
+const PARAMS_S2: SubjectParams = {
+  sinit_n: 0.64289629,
+  alpha_r:  0.94901764,
+  alpha_s:  0.92846270,
+  m_s_mal:  0.36227230,
+  m_r_uefm: 0.17691457,
+  m_s_wmft: 0.72314731,
+  m_r_wmft: 0.35062007,
+  cst:       1.43809090,
+  proportion: 0.71495171,
+};
+
+function smoothClamp(x: number, k = 50.0): number {
+  const xf = 0.001 + Math.log1p(Math.exp(Math.max(-500, Math.min(k * (x - 0.001), 500)))) / k;
+  return 0.999 - Math.log1p(Math.exp(Math.max(-500, Math.min(k * (0.999 - xf), 500)))) / k;
 }
 
-const subject1Mal = [
-  1.45, 1.55, 1.64, 1.83, 2.11, 2.34, 2.57, 2.78, 2.94, 3.05, 3.15,
-  3.20, 3.23, 3.26, 3.29, 3.31, 3.33, 3.35, 3.36, 3.37, 3.38,
-  ...plateau(3.38, 3.45, 31),
-];
+function computeNormO(ntime: number): number[] {
+  const raw: number[] = new Array(ntime);
+  let pState = 1.0;
+  let oVal = 0.0;
+  for (let t = 0; t < ntime; t++) {
+    pState = ALPHA_P * pState + (t === 0 ? 1.0 : C0);
+    oVal = ALPHA_O * oVal + pState;
+    raw[t] = oVal;
+  }
+  const maxVal = Math.max(...raw);
+  return raw.map((v) => v / maxVal);
+}
 
-const subject2Mal = [
-  2.02, 2.11, 2.24, 2.42, 2.68, 2.92, 3.15, 3.36, 3.52, 3.68, 3.81,
-  3.91, 4.00, 4.07, 4.13, 4.18, 4.22, 4.25, 4.28, 4.30, 4.32,
-  ...plateau(4.32, 4.40, 31),
-];
+function simulate(
+  dosesHours: number[],
+  p: SubjectParams,
+): { mal: number[]; uefm: number[]; wmft: number[] } {
+  const tMax = dosesHours.length;
+  const mal: number[] = new Array(tMax);
+  const uefm: number[] = new Array(tMax);
+  const wmft: number[] = new Array(tMax);
+  let s = p.sinit_n;
+  let rM = 0.0;
+  const normO = computeNormO(tMax);
+  const sTarget = p.proportion + (1.0 - p.proportion) * p.sinit_n;
 
-const subject1Uefm = [
-  30.133, 30.491, 30.874, 31.347, 32.45, 33.402, 33.915, 34.702, 35.514,
-  36.192, 36.88, 37.404, 37.452, 37.428, 37.601, 37.605, 37.666, 37.645,
-  37.676, 37.683, 37.67,
-  ...plateau(37.67, 38.0, 31),
-];
+  for (let t = 0; t < tMax; t++) {
+    const doseNorm = dosesHours[t] / DOSE_NORM;
+    const predM = smoothClamp(s * p.m_s_mal + rM);
+    const predU = smoothClamp(s + rM * p.m_r_uefm);
+    const predW = smoothClamp(s * p.m_s_wmft + rM * p.m_r_wmft);
+    const eff = p.cst * normO[t] * doseNorm;
+    const sNext = p.alpha_s * s + sTarget * (1.0 - p.alpha_s);
+    const rNext = p.alpha_r * rM + eff * BETA_R + BETA_F * predM;
+    mal[t] = predM * 5.0;
+    uefm[t] = predU * 66.0;
+    wmft[t] = predW;
+    s = sNext;
+    rM = rNext;
+  }
+  return { mal, uefm, wmft };
+}
 
-const subject2Uefm = [
-  42.432, 43.707, 44.955, 46.424, 47.839, 49.748, 51.228, 53.145, 54.837,
-  56.314, 57.784, 58.932, 60.128, 60.491, 60.912, 61.161, 61.386, 61.588,
-  61.77, 61.965, 62.11,
-  ...plateau(62.11, 62.5, 31),
-];
-
-const subject1Wmft = [
-  0.369, 0.374, 0.381, 0.391, 0.423, 0.451, 0.463, 0.485, 0.508, 0.527,
-  0.546, 0.56, 0.557, 0.552, 0.554, 0.55, 0.548, 0.544, 0.541, 0.538, 0.534,
-  ...plateau(0.534, 0.55, 31),
-];
-
-const subject2Wmft = [
-  0.465, 0.48, 0.496, 0.521, 0.545, 0.585, 0.614, 0.656, 0.694, 0.725,
-  0.758, 0.781, 0.807, 0.809, 0.813, 0.813, 0.812, 0.811, 0.81, 0.811, 0.81,
-  ...plateau(0.81, 0.83, 31),
-];
+// ---------------------------------------------------------------------------
+// Dose schedules from adaptive_scheduling.ipynb run
+// budget=30h, dose weeks 0-25 only, total delivered: S1=29.5h, S2=30.0h
+// ---------------------------------------------------------------------------
 
 const subject1Doses = [
-  0, 0.5, 1.5, 7.5, 6.5, 3, 6, 7, 6.5, 7.5, 6.5,
-  1, 0, 3, 0.5, 1.5, 0, 1, 0.5, 0, 0,
-  ...new Array(31).fill(0),
+  0.0, 0.5, 1.0, 2.5, 5.0, 2.0, 9.0, 0.0, 0.0, 7.5, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+  1.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
 ];
 
 const subject2Doses = [
-  0, 0.5, 2.5, 2.5, 6, 4, 7.5, 7, 6.5, 7.5, 6,
-  7.5, 0.5, 1.5, 0, 0, 0, 0, 0.5, 0, 0,
-  ...new Array(31).fill(0),
+  0.0, 0.0, 0.5, 2.0, 8.0, 0.5, 3.0, 7.5, 8.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+  0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0,
+  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
 ];
+
+// Pre-computed trajectories (deterministic forward simulation with true params)
+const { mal: subject1Mal, uefm: subject1Uefm, wmft: subject1Wmft } = simulate(subject1Doses, PARAMS_S1);
+const { mal: subject2Mal, uefm: subject2Uefm, wmft: subject2Wmft } = simulate(subject2Doses, PARAMS_S2);
+
+// ---------------------------------------------------------------------------
+// Patient records
+// ---------------------------------------------------------------------------
 
 export const adaptiveNotebookPatients: Patient[] = [
   {
@@ -99,7 +160,7 @@ export const adaptiveNotebookPatients: Patient[] = [
     displayId: "376",
     name: "376",
     past: false,
-    budget: 60,
+    budget: 30,
     maxDose: 10,
     age: 52,
     weeksSinceStroke: 0,
@@ -121,7 +182,7 @@ export const adaptiveNotebookPatients: Patient[] = [
     displayId: "377",
     name: "377",
     past: false,
-    budget: 60,
+    budget: 30,
     maxDose: 10,
     age: 60,
     weeksSinceStroke: 0,
@@ -138,6 +199,10 @@ export const adaptiveNotebookPatients: Patient[] = [
     modelSGLD,
   },
 ];
+
+// ---------------------------------------------------------------------------
+// Lookup helpers
+// ---------------------------------------------------------------------------
 
 export function getAdaptiveNotebookPatient(id: string): Patient | undefined {
   const normalizedId = id.trim().toLowerCase();
@@ -160,24 +225,29 @@ export function getAdaptiveNotebookSnapshot(id: string, week: NotebookSnapshotWe
   const end = week + 1;
   return {
     week,
-    outcomes: (isSubject2 ? subject2Mal : subject1Mal).slice(0, end),
-    actions: (isSubject2 ? subject2Doses : subject1Doses).slice(0, end),
-    observedMal: (isSubject2 ? subject2Mal : subject1Mal).slice(0, end),
+    outcomes:    (isSubject2 ? subject2Mal  : subject1Mal).slice(0, end),
+    actions:     (isSubject2 ? subject2Doses : subject1Doses).slice(0, end),
+    observedMal:  (isSubject2 ? subject2Mal  : subject1Mal).slice(0, end),
     observedUefm: (isSubject2 ? subject2Uefm : subject1Uefm).slice(0, end),
     observedWmft: (isSubject2 ? subject2Wmft : subject1Wmft).slice(0, end),
   };
 }
+
+// ---------------------------------------------------------------------------
+// Prediction responses — use actual state-space simulation, not delta approx
+// ---------------------------------------------------------------------------
 
 export function getAdaptiveNotebookOptimizeResponse(id: string): NotebookOptimizeResponse | undefined {
   const patient = getAdaptiveNotebookPatient(id);
   if (!patient) return undefined;
 
   const isSubject2 = patient.id.endsWith("2");
-  const meanPrediction = isSubject2 ? subject2Mal : subject1Mal;
-  const scheduleHours = isSubject2 ? subject2Doses : subject1Doses;
-  const uefmPrediction = isSubject2 ? subject2Uefm : subject1Uefm;
-  const wmftPrediction = isSubject2 ? subject2Wmft : subject1Wmft;
-  return buildNotebookResponse(id, meanPrediction, scheduleHours, uefmPrediction, wmftPrediction);
+  return buildNotebookResponse(
+    isSubject2 ? subject2Mal  : subject1Mal,
+    isSubject2 ? subject2Doses : subject1Doses,
+    isSubject2 ? subject2Uefm : subject1Uefm,
+    isSubject2 ? subject2Wmft : subject1Wmft,
+  );
 }
 
 export function getAdaptiveNotebookManualPredictResponse(
@@ -188,66 +258,46 @@ export function getAdaptiveNotebookManualPredictResponse(
   if (!patient) return undefined;
 
   const isSubject2 = patient.id.endsWith("2");
-  const baseMean = isSubject2 ? subject2Mal : subject1Mal;
-  const baseSchedule = isSubject2 ? subject2Doses : subject1Doses;
-  const baseUefm = isSubject2 ? subject2Uefm : subject1Uefm;
-  const baseWmft = isSubject2 ? subject2Wmft : subject1Wmft;
-  const normalizedSchedule = Array.from(
+  const params = isSubject2 ? PARAMS_S2 : PARAMS_S1;
+
+  // Pad / trim to exactly NOTEBOOK_HORIZON_WEEKS
+  const doses = Array.from(
     { length: NOTEBOOK_HORIZON_WEEKS },
-    (_, index) => Number(scheduleHours[index] ?? 0),
+    (_, i) => Number(scheduleHours[i] ?? 0),
   );
 
-  // After the dose horizon, treatment effect decays exponentially (half-life ~13 weeks).
-  const DECAY_RATE = Math.log(2) / 13;
-  const effectDecay = (index: number) => {
-    const weeksAfter = index - (NOTEBOOK_DOSE_HORIZON_WEEKS - 1);
-    return weeksAfter <= 0 ? 1 : Math.exp(-DECAY_RATE * weeksAfter);
+  // Run actual notebook dynamics — no approximation
+  const { mal, uefm, wmft } = simulate(doses, params);
+
+  return buildNotebookResponse(mal, doses, uefm, wmft);
+}
+
+// ---------------------------------------------------------------------------
+// Response builder
+// ---------------------------------------------------------------------------
+
+function band(mean: number[], width: number, min = 0, max = Number.POSITIVE_INFINITY): Band {
+  return {
+    mean,
+    p05: mean.map((v) => Math.max(min, v - width)),
+    p95: mean.map((v) => Math.min(max, v + width)),
   };
-
-  let cumulativeDelta = 0;
-  const meanPrediction = baseMean.map((value, index) => {
-    if (index < NOTEBOOK_DOSE_HORIZON_WEEKS) {
-      cumulativeDelta += (normalizedSchedule[index] ?? 0) - (baseSchedule[index] ?? 0);
-    }
-    return Math.max(0, Math.min(5, value + cumulativeDelta * 0.06 * effectDecay(index)));
-  });
-
-  cumulativeDelta = 0;
-  const uefmPrediction = baseUefm.map((value, index) => {
-    if (index < NOTEBOOK_DOSE_HORIZON_WEEKS) {
-      cumulativeDelta += (normalizedSchedule[index] ?? 0) - (baseSchedule[index] ?? 0);
-    }
-    return Math.max(0, Math.min(66, value + cumulativeDelta * 0.45 * effectDecay(index)));
-  });
-
-  cumulativeDelta = 0;
-  const wmftPrediction = baseWmft.map((value, index) => {
-    if (index < NOTEBOOK_DOSE_HORIZON_WEEKS) {
-      cumulativeDelta += (normalizedSchedule[index] ?? 0) - (baseSchedule[index] ?? 0);
-    }
-    return Math.max(0, Math.min(1, value + cumulativeDelta * 0.006 * effectDecay(index)));
-  });
-
-  return buildNotebookResponse(id, meanPrediction, normalizedSchedule, uefmPrediction, wmftPrediction);
 }
 
 function buildNotebookResponse(
-  id: string,
-  meanPrediction: number[],
+  malMean: number[],
   scheduleHours: number[],
-  uefmPrediction?: number[],
-  wmftPrediction?: number[],
+  uefmMean: number[],
+  wmftMean: number[],
 ): NotebookOptimizeResponse {
-  const uefmMean = uefmPrediction ?? meanPrediction.map((value) => Math.min(66, 20 + value * 8.2));
-  const wmftMean = wmftPrediction ?? meanPrediction.map((value) => Math.min(1, 0.24 + value * 0.11));
-  const sMean = meanPrediction.map((value) => Math.min(1, 0.18 + value * 0.095));
-  const rMean = meanPrediction.map((value, index) => Math.min(1, 0.02 + value * 0.045 + index * 0.006));
+  const sMean  = malMean.map((v) => Math.min(1, 0.18 + (v / 5) * 0.095));
+  const rMMean = malMean.map((v, i) => Math.min(1, 0.02 + (v / 5) * 0.045 + i * 0.006));
 
-  const malSmooth = band(meanPrediction, 0.28, 0, 5);
+  const malSmooth = band(malMean, 0.28, 0, 5);
   return {
     scheduleHours,
-    totalHours: scheduleHours.reduce((sum, hours) => sum + hours, 0),
-    convergence: Array.from({ length: 45 }, (_, index) => 0.05 + Math.log1p(index + 1) * 0.035),
+    totalHours: scheduleHours.reduce((sum, h) => sum + h, 0),
+    convergence: Array.from({ length: 45 }, (_, i) => 0.05 + Math.log1p(i + 1) * 0.035),
     maxPrediction: malSmooth.p95,
     minPrediction: malSmooth.p05,
     meanPrediction: malSmooth.mean,
@@ -255,10 +305,10 @@ function buildNotebookResponse(
     malSmooth,
     uefmSmooth: band(uefmMean, 3.2, 0, 66),
     wmftSmooth: band(wmftMean, 0.07, 0, 1),
-    mal: band(meanPrediction, 0.45, 0, 5),
-    uefm: band(uefmMean, 5.5, 0, 66),
+    mal:  band(malMean,  0.45, 0, 5),
+    uefm: band(uefmMean, 5.5,  0, 66),
     wmft: band(wmftMean, 0.11, 0, 1),
-    s: band(sMean, 0.05, 0, 1),
-    rM: band(rMean, 0.06, 0, 1),
+    s:    band(sMean,   0.05, 0, 1),
+    rM:   band(rMMean,  0.06, 0, 1),
   };
 }
