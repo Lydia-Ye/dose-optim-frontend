@@ -118,9 +118,9 @@ export default function NewPatientPage({ patient, setPatient }: PatientPageProps
     newAvgOut: number[],
     newDoseData: (number | null)[],
     snapshotData?: {
-      observedMal: number[];
-      observedUefm: number[];
-      observedWmft: number[];
+      observedMal: (number | null)[];
+      observedUefm: (number | null)[];
+      observedWmft: (number | null)[];
     },
   ) => {
     setPastAvgOut(newAvgOut);

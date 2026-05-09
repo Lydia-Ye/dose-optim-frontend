@@ -19,9 +19,9 @@ interface UploadDataFormProps {
         newAvgOut: number[],
         newDoseData: (number|null)[],
         snapshotData?: {
-            observedMal: number[];
-            observedUefm: number[];
-            observedWmft: number[];
+            observedMal: (number | null)[];
+            observedUefm: (number | null)[];
+            observedWmft: (number | null)[];
         },
     ) => void;
 }
@@ -372,7 +372,11 @@ export default function UploadDataForm({ patientID, pastAvgOut, pastDoseData, se
                                 <div className="font-semibold">Treatment Hours</div>
                             </div>
                             <div className="divide-y divide-gray-100">
-                                {pastDoseDataState.map((value, i) => (
+                                {pastDoseDataState.map((value, i) => {
+                                    const outcome = pastAvgOutState[i];
+                                    // Skip unobserved slots (null/NaN sentinel for week 0)
+                                    if (outcome == null || !Number.isFinite(Number(outcome))) return null;
+                                    return (
                                     <div
                                         className="grid grid-cols-4 gap-2 px-2 py-3 items-center"
                                         key={i}
@@ -423,7 +427,8 @@ export default function UploadDataForm({ patientID, pastAvgOut, pastDoseData, se
                                             ) : null}
                                         </div>
                                     </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </div>
                         {(isEditing) && (

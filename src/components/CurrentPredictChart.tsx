@@ -132,7 +132,7 @@ export default function CurrentPredictChart({
 
   const malPredicted = (!showSmooth && hasManual)
     ? [
-        { x: n - 0.5, y: lastObserved },
+        { x: lastObservedWeek, y: lastObserved },
         ...Array.from({ length: horizon - n + 1 }, (_, i) => ({
           x: n + i + 0.5,
           y: manualPrediction.futureAvgOut[n + i] ?? null,
@@ -142,7 +142,7 @@ export default function CurrentPredictChart({
 
   const malMax = (!showSmooth && hasManual)
     ? [
-        { x: n - 0.5, y: lastObserved },
+        { x: lastObservedWeek, y: lastObserved },
         ...Array.from({ length: horizon - n + 1 }, (_, i) => ({
           x: n + i + 0.5,
           y: manualPrediction.maxOut[n + i] ?? null,
@@ -152,7 +152,7 @@ export default function CurrentPredictChart({
 
   const malMin = (!showSmooth && hasManual)
     ? [
-        { x: n - 0.5, y: lastObserved },
+        { x: lastObservedWeek, y: lastObserved },
         ...Array.from({ length: horizon - n + 1 }, (_, i) => ({
           x: n + i + 0.5,
           y: manualPrediction.minOut[n + i] ?? null,
@@ -163,7 +163,7 @@ export default function CurrentPredictChart({
   // --- CEM MAL mode ---
   const cemMalPredicted = (!showSmooth && hasCem)
     ? [
-        { x: n - 0.5, y: lastObserved },
+        { x: lastObservedWeek, y: lastObserved },
         ...Array.from({ length: horizon - n + 1 }, (_, i) => ({
           x: n + i + 0.5,
           y: cemPrediction!.futureAvgOut[n + i] ?? null,
@@ -173,7 +173,7 @@ export default function CurrentPredictChart({
 
   const cemMalMax = (!showSmooth && hasCem)
     ? [
-        { x: n - 0.5, y: lastObserved },
+        { x: lastObservedWeek, y: lastObserved },
         ...Array.from({ length: horizon - n + 1 }, (_, i) => ({
           x: n + i + 0.5,
           y: cemPrediction!.maxOut[n + i] ?? null,
@@ -183,7 +183,7 @@ export default function CurrentPredictChart({
 
   const cemMalMin = (!showSmooth && hasCem)
     ? [
-        { x: n - 0.5, y: lastObserved },
+        { x: lastObservedWeek, y: lastObserved },
         ...Array.from({ length: horizon - n + 1 }, (_, i) => ({
           x: n + i + 0.5,
           y: cemPrediction!.minOut[n + i] ?? null,

@@ -160,15 +160,16 @@ export default function ManualScheduleForm({
               <div className="font-semibold">Status</div>
             </div>
             <div className="divide-y divide-gray-100">
-              {/* Read-only past data */}
+              {/* Read-only past data — skip unobserved slots (null / NaN) */}
               {readonlyOutcomes.map((outcome, i) => {
+                if (outcome == null || !Number.isFinite(outcome as number)) return null;
                 return (
                   <div className="grid grid-cols-4 gap-2 px-2 py-3 items-center" key={`row-${i}`}>
                     <div>{i}</div>
                     <div>
                       <input
                         type="text"
-                        value={outcome.toFixed(2)}
+                        value={(outcome as number).toFixed(2)}
                         readOnly
                         className="px-3 py-2 border rounded w-full bg-gray-100 text-gray-500"
                       />
