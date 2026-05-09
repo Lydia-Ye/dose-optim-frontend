@@ -140,8 +140,9 @@ export default function AllPatientsPage() {
         </div>
 
         <button
-          onClick={() => setShowForm(true)}
-          className="bg-[var(--color-primary)] text-white text-sm font-medium px-5 py-2.5 rounded-full w-full"
+          disabled
+          title="Active adaptive patients are seeded from adaptive_scheduling.ipynb for now."
+          className="bg-[var(--color-primary)] text-white text-sm font-medium px-5 py-2.5 rounded-full w-full opacity-50 cursor-not-allowed"
         >
           + Add Patient
         </button>

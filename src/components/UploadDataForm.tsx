@@ -4,13 +4,26 @@ import React, { useState, useRef, useEffect} from "react";
 import Papa from "papaparse";
 import { ResultsPutRequest } from "@/types/resultsPutRequest";
 import Button from "@/components/ui/Button";
+import {
+    getAdaptiveNotebookSnapshot,
+    isAdaptiveNotebookPatient,
+    NotebookSnapshotWeek,
+} from "@/lib/adaptiveNotebookPatients";
 
 interface UploadDataFormProps {
     patientID: string;
     pastAvgOut: number[];
     pastDoseData: (number|null)[];
     setShowForm: React.Dispatch<React.SetStateAction<boolean>>;
-    onDataUpdated?: (newAvgOut: number[], newDoseData: (number|null)[]) => void;
+    onDataUpdated?: (
+        newAvgOut: number[],
+        newDoseData: (number|null)[],
+        snapshotData?: {
+            observedMal: (number | null)[];
+            observedUefm: (number | null)[];
+            observedWmft: (number | null)[];
+        },
+    ) => void;
 }
 
 export default function UploadDataForm({ patientID, pastAvgOut, pastDoseData, setShowForm, onDataUpdated }: UploadDataFormProps) {
@@ -28,6 +41,10 @@ export default function UploadDataForm({ patientID, pastAvgOut, pastDoseData, se
     const [progress, setProgress] = useState(0);
     const [statusMessage, setStatusMessage] = useState("");
     const [success, setSuccess] = useState(false);
+    const isNotebookPatient = isAdaptiveNotebookPatient(patientID);
+    const currentSnapshotWeek = ([1, 7, 14, 21] as const).includes((pastAvgOutState.length - 1) as NotebookSnapshotWeek)
+        ? pastAvgOutState.length - 1
+        : null;
 
     useEffect(() => {
         let interval: NodeJS.Timeout | null = null;
@@ -174,6 +191,25 @@ export default function UploadDataForm({ patientID, pastAvgOut, pastDoseData, se
         setValidationError(null);
     };
 
+    const applyNotebookSnapshot = (week: NotebookSnapshotWeek) => {
+        const snapshot = getAdaptiveNotebookSnapshot(patientID, week);
+        if (!snapshot) return;
+
+        setPastAvgOutState(snapshot.outcomes);
+        setPastDoseDataState(snapshot.actions);
+        setPastDoseDataStateInputs(snapshot.actions.map(item => item === null ? "" : String(item)));
+        setValidationError(null);
+        setIsEditing(false);
+        setSuccess(true);
+        if (onDataUpdated) {
+            onDataUpdated(snapshot.outcomes, snapshot.actions, {
+                observedMal: snapshot.observedMal,
+                observedUefm: snapshot.observedUefm,
+                observedWmft: snapshot.observedWmft,
+            });
+        }
+    };
+
     // Function to finalize new update in database.
     // Called on form submission.
     const uploadData = async (e: React.FormEvent) => {
@@ -275,6 +311,27 @@ export default function UploadDataForm({ patientID, pastAvgOut, pastDoseData, se
                     </div>
                 )}
 
+                {isNotebookPatient && isEditing && (
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-gray-50 border border-gray-200 rounded-lg px-4 py-3">
+                        <div className="text-sm text-gray-600">
+                            Notebook snapshot
+                        </div>
+                        <div className="flex gap-2">
+                            {([1, 7, 14, 21] as const).map((week) => (
+                                <Button
+                                    key={week}
+                                    type="button"
+                                    variant={currentSnapshotWeek === week ? "primary" : "outline"}
+                                    onClick={() => applyNotebookSnapshot(week)}
+                                    className="!px-3 !py-1"
+                                >
+                                    Week {week}
+                                </Button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 {isEmpty ? (
                     <div className="flex flex-col items-center justify-center py-16">
                         <svg width="64" height="64" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="text-gray-300 mb-4"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6 1a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
@@ -315,7 +372,11 @@ export default function UploadDataForm({ patientID, pastAvgOut, pastDoseData, se
                                 <div className="font-semibold">Treatment Hours</div>
                             </div>
                             <div className="divide-y divide-gray-100">
-                                {pastDoseDataState.map((value, i) => (
+                                {pastDoseDataState.map((value, i) => {
+                                    const outcome = pastAvgOutState[i];
+                                    // Skip unobserved slots (null/NaN sentinel for week 0)
+                                    if (outcome == null || !Number.isFinite(Number(outcome))) return null;
+                                    return (
                                     <div
                                         className="grid grid-cols-4 gap-2 px-2 py-3 items-center"
                                         key={i}
@@ -366,7 +427,8 @@ export default function UploadDataForm({ patientID, pastAvgOut, pastDoseData, se
                                             ) : null}
                                         </div>
                                     </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </div>
                         {(isEditing) && (
@@ -427,7 +489,7 @@ export default function UploadDataForm({ patientID, pastAvgOut, pastDoseData, se
                         <div className="w-full flex justify-center z-20">
                             <div className="max-w-lg w-full mx-auto px-6 py-3 bg-green-50 border border-green-300 rounded-lg shadow text-green-900 text-base font-semibold flex items-center gap-3 justify-center text-center">
                                 <svg className="w-5 h-5 text-green-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                                Observations saved. Model updated successfully.
+                                {isNotebookPatient ? "Notebook snapshot loaded." : "Observations saved. Model updated successfully."}
                             </div>
                         </div>
                     )}

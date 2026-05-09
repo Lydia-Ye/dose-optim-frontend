@@ -48,6 +48,7 @@ interface ChartProps {
   pastDoseData: number[];
   manualPrediction: ModelPrediction;
   horizon: number;
+  doseHorizon?: number;
   smoothBand?: SmoothBand;
   cemPrediction?: ModelPrediction;
   cemSmoothBand?: SmoothBand;
@@ -71,6 +72,7 @@ export default function CurrentPredictChart({
   pastDoseData,
   manualPrediction,
   horizon,
+  doseHorizon,
   smoothBand,
   cemPrediction,
   cemSmoothBand,
@@ -79,6 +81,7 @@ export default function CurrentPredictChart({
   doseBarPercentage = 0.9,
   doseBarThickness,
 }: ChartProps) {
+  const effectiveDoseHorizon = doseHorizon ?? horizon;
   const showSmooth = !!(smoothBand?.mean?.length);
   const showCemSmooth = !!(cemSmoothBand?.mean?.length);
   // Short metric name for labels, e.g. "UEFM Score" → "UEFM"
@@ -105,15 +108,33 @@ export default function CurrentPredictChart({
   const lastObserved = [...pastAvgOut].reverse().find((y) => y != null && Number.isFinite(y)) ?? 0;
 
   // --- MAL mode: observed line + optional prediction bands ---
-  const malObserved = pastAvgOut
-    .map((y, w) => (y != null && Number.isFinite(y) ? { x: w, y } : null))
+  const observedMetric = pastAvgOut
+    .map((y, w) => (y != null && Number.isFinite(y) ? { x: w + 0.5, y } : null))
     .filter((point): point is { x: number; y: number } => point !== null);
+  const lastObservedWeek = observedMetric.length > 0
+    ? observedMetric[observedMetric.length - 1].x
+    : -1;
+  const firstPredictionWeek = Math.min(horizon, lastObservedWeek + 1);
+  const observedDataset = {
+    type: "line" as const,
+    label: `Observed ${metric}`,
+    borderColor: "rgb(30, 90, 200)",
+    backgroundColor: "rgba(30, 90, 200, 0.1)",
+    borderWidth: 2,
+    pointRadius: 4,
+    pointHoverRadius: 6,
+    pointBackgroundColor: "rgb(30, 90, 200)",
+    tension: 0,
+    yAxisID: "y-left",
+    fill: false,
+    data: observedMetric,
+  };
 
   const malPredicted = (!showSmooth && hasManual)
     ? [
-        { x: n - 1, y: lastObserved },
+        { x: lastObservedWeek, y: lastObserved },
         ...Array.from({ length: horizon - n + 1 }, (_, i) => ({
-          x: n + i,
+          x: n + i + 0.5,
           y: manualPrediction.futureAvgOut[n + i] ?? null,
         })),
       ]
@@ -121,9 +142,9 @@ export default function CurrentPredictChart({
 
   const malMax = (!showSmooth && hasManual)
     ? [
-        { x: n - 1, y: lastObserved },
+        { x: lastObservedWeek, y: lastObserved },
         ...Array.from({ length: horizon - n + 1 }, (_, i) => ({
-          x: n + i,
+          x: n + i + 0.5,
           y: manualPrediction.maxOut[n + i] ?? null,
         })),
       ]
@@ -131,9 +152,9 @@ export default function CurrentPredictChart({
 
   const malMin = (!showSmooth && hasManual)
     ? [
-        { x: n - 1, y: lastObserved },
+        { x: lastObservedWeek, y: lastObserved },
         ...Array.from({ length: horizon - n + 1 }, (_, i) => ({
-          x: n + i,
+          x: n + i + 0.5,
           y: manualPrediction.minOut[n + i] ?? null,
         })),
       ]
@@ -142,9 +163,9 @@ export default function CurrentPredictChart({
   // --- CEM MAL mode ---
   const cemMalPredicted = (!showSmooth && hasCem)
     ? [
-        { x: n - 1, y: lastObserved },
+        { x: lastObservedWeek, y: lastObserved },
         ...Array.from({ length: horizon - n + 1 }, (_, i) => ({
-          x: n + i,
+          x: n + i + 0.5,
           y: cemPrediction!.futureAvgOut[n + i] ?? null,
         })),
       ]
@@ -152,9 +173,9 @@ export default function CurrentPredictChart({
 
   const cemMalMax = (!showSmooth && hasCem)
     ? [
-        { x: n - 1, y: lastObserved },
+        { x: lastObservedWeek, y: lastObserved },
         ...Array.from({ length: horizon - n + 1 }, (_, i) => ({
-          x: n + i,
+          x: n + i + 0.5,
           y: cemPrediction!.maxOut[n + i] ?? null,
         })),
       ]
@@ -162,22 +183,33 @@ export default function CurrentPredictChart({
 
   const cemMalMin = (!showSmooth && hasCem)
     ? [
-        { x: n - 1, y: lastObserved },
+        { x: lastObservedWeek, y: lastObserved },
         ...Array.from({ length: horizon - n + 1 }, (_, i) => ({
-          x: n + i,
+          x: n + i + 0.5,
           y: cemPrediction!.minOut[n + i] ?? null,
         })),
       ]
     : [];
 
-  // --- Smooth band mode: full-horizon trajectory (UEFM / WMFT) ---
-  const smoothMain  = showSmooth ? smoothBand!.mean.map((y, w) => ({ x: w, y })) : [];
-  const smoothUpper = showSmooth ? smoothBand!.p95.map((y, w)  => ({ x: w, y })) : [];
-  const smoothLower = showSmooth ? smoothBand!.p05.map((y, w)  => ({ x: w, y })) : [];
+  const futureBandPoints = (values: number[]) => values
+    .map((y, w) => ({ x: w + 0.5, y }))
+    .filter((point) => point.x >= firstPredictionWeek);
+  const anchoredFuturePoints = (values: number[]) => {
+    const futurePoints = futureBandPoints(values);
+    if (lastObservedWeek < 0 || firstPredictionWeek > horizon) {
+      return futurePoints;
+    }
+    return [{ x: lastObservedWeek, y: lastObserved }, ...futurePoints];
+  };
 
-  const cemSmoothMain  = showCemSmooth ? cemSmoothBand!.mean.map((y, w) => ({ x: w, y })) : [];
-  const cemSmoothUpper = showCemSmooth ? cemSmoothBand!.p95.map((y, w)  => ({ x: w, y })) : [];
-  const cemSmoothLower = showCemSmooth ? cemSmoothBand!.p05.map((y, w)  => ({ x: w, y })) : [];
+  // --- Smooth band mode: future-only trajectory (UEFM / WMFT) ---
+  const smoothMain  = showSmooth ? anchoredFuturePoints(smoothBand!.mean) : [];
+  const smoothUpper = showSmooth ? anchoredFuturePoints(smoothBand!.p95) : [];
+  const smoothLower = showSmooth ? anchoredFuturePoints(smoothBand!.p05) : [];
+
+  const cemSmoothMain  = showCemSmooth ? anchoredFuturePoints(cemSmoothBand!.mean) : [];
+  const cemSmoothUpper = showCemSmooth ? anchoredFuturePoints(cemSmoothBand!.p95) : [];
+  const cemSmoothLower = showCemSmooth ? anchoredFuturePoints(cemSmoothBand!.p05) : [];
 
   const allP95 = [
     ...(showSmooth    ? smoothBand!.p95    : []),
@@ -188,17 +220,24 @@ export default function CurrentPredictChart({
     : (yMax ?? 5);
 
   // --- Dose bars ---
+  // xMax drives the full x-axis (includes prediction-only weeks beyond dose horizon).
   const xMax = Math.max(horizon, pastDoseData.length);
+  // Dose bars are drawn only up to effectiveDoseHorizon.
+  const doseXMax = Math.min(effectiveDoseHorizon, xMax);
   const dosePoints: { x: number; y: number | null }[] = [];
   const doseColors: string[] = [];
   const hasFutureSchedule = hasManual || hasCem;
+  const compareDoseBars = hasManual && hasCem;
+  const effectiveDoseBarThickness = doseBarThickness ?? (compareDoseBars ? 12 : undefined);
+  const observedDoseCount = Math.min(effectiveDoseHorizon, Math.max(0, pastDoseData.length));
   const futureDoseSource = hasManual
     ? manualPrediction.futureDoseData
     : hasCem ? cemPrediction!.futureDoseData : [];
-  for (let w = 0; w < xMax; w++) {
-    const isPast = hasFutureSchedule ? w < n - 1 : w < pastDoseData.length;
+  for (let w = 0; w < doseXMax; w++) {
+    const isPast = hasFutureSchedule ? w < observedDoseCount : w < pastDoseData.length;
+    const xOffset = compareDoseBars && !isPast ? -0.16 : 0;
     dosePoints.push({
-      x: w + 0.5,
+      x: w + 0.5 + xOffset,
       y: isPast
         ? (pastDoseData[w] ?? null)
         : (hasFutureSchedule ? (futureDoseSource[w] ?? null) : null),
@@ -209,10 +248,10 @@ export default function CurrentPredictChart({
   // CEM future dose bars — only built when both manual and CEM are active
   const cemDosePoints: { x: number; y: number | null }[] = [];
   if (hasManual && hasCem) {
-    for (let w = 0; w < xMax; w++) {
+    for (let w = 0; w < doseXMax; w++) {
       cemDosePoints.push({
-        x: w + 0.5,
-        y: w < n - 1 ? null : (cemPrediction!.futureDoseData[w] ?? null),
+        x: w + 0.66,
+        y: w < observedDoseCount ? null : (cemPrediction!.futureDoseData[w] ?? null),
       });
     }
   }
@@ -323,25 +362,13 @@ export default function CurrentPredictChart({
               fill: "-1",
               data: smoothLower,
             },
+            observedDataset,
           ]
         : showCemSmooth
-        ? [] // CEM-only smooth mode: no manual datasets, no observed line
+        ? [observedDataset]
         : [
             // --- MAL mode: observed + optional manual prediction ---
-            {
-              type: "line" as const,
-              label: `Observed ${metric}`,
-              borderColor: "rgb(30, 90, 200)",
-              backgroundColor: "rgba(30, 90, 200, 0.1)",
-              borderWidth: 2,
-              pointRadius: 4,
-              pointHoverRadius: 6,
-              pointBackgroundColor: "rgb(30, 90, 200)",
-              tension: 0,
-              yAxisID: "y-left",
-              fill: false,
-              data: malObserved,
-            },
+            observedDataset,
             ...(hasManual
               ? [
                   {
@@ -474,8 +501,8 @@ export default function CurrentPredictChart({
         borderColor: "white",
         borderWidth: 1,
         yAxisID: "y-right",
-        barPercentage: doseBarPercentage,
-        ...(doseBarThickness != null ? { barThickness: doseBarThickness } : {}),
+        barPercentage: compareDoseBars ? 0.52 : doseBarPercentage,
+        ...(effectiveDoseBarThickness != null ? { barThickness: effectiveDoseBarThickness } : {}),
         data: dosePoints,
       },
       ...(hasManual && hasCem ? [{
@@ -485,8 +512,8 @@ export default function CurrentPredictChart({
         borderColor: "white",
         borderWidth: 1,
         yAxisID: "y-right",
-        barPercentage: doseBarPercentage,
-        ...(doseBarThickness != null ? { barThickness: doseBarThickness } : {}),
+        barPercentage: 0.52,
+        ...(effectiveDoseBarThickness != null ? { barThickness: effectiveDoseBarThickness } : {}),
         data: cemDosePoints,
       }] : []),
     ],

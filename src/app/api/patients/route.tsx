@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { backendGet, backendPost, toFrontendPatient, BackendPatient, BACKEND_URL } from "@/lib/backend";
+import { adaptiveNotebookPatients } from "@/lib/adaptiveNotebookPatients";
 
 export async function GET() {
   try {
     const patients = await backendGet<BackendPatient[]>("/v1/patients");
-    return NextResponse.json(patients.map(toFrontendPatient));
+    const pastPatients = patients.map(toFrontendPatient).filter((patient) => patient.past);
+    return NextResponse.json([...adaptiveNotebookPatients, ...pastPatients]);
   } catch (error) {
     console.error(error);
     return NextResponse.json({ error: "Failed to fetch patients" }, { status: 500 });
@@ -25,7 +27,7 @@ export async function POST(req: Request) {
       max_dose_per_week: data.maxDose,
       weeks_since_stroke: data.weeksSinceStroke ?? 0,
       treatment_start_week: 0,
-      n_treatment_weeks: data.horizon,
+      n_treatment_weeks: Math.floor(data.horizon / 2),
       horizon_weeks: data.horizon,
     };
 
@@ -51,7 +53,7 @@ export async function PUT(req: Request) {
       left_stroke: data.context?.leftStroke,
       male: data.context?.male,
       weeks_since_stroke: data.context?.weeksSinceStroke ?? 0,
-      n_treatment_weeks: data.horizon,
+      n_treatment_weeks: Math.floor(data.horizon / 2),
       horizon_weeks: data.horizon,
     };
 

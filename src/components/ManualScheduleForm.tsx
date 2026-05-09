@@ -10,6 +10,7 @@ interface ManualScheduleFormProps {
   setShowForm: React.Dispatch<React.SetStateAction<boolean>>;
   maxDose: number;
   horizon: number;
+  doseHorizon?: number;
   budget: number;
   onClose?: () => void;
 }
@@ -21,17 +22,20 @@ export default function ManualScheduleForm({
   setShowForm,
   maxDose,
   horizon,
+  doseHorizon,
   budget,
   onClose,
 }: ManualScheduleFormProps) {
-  const [futureActions, setFutureActions] = useState<number[]>(Array(horizon).fill(0));
+  const effectiveDoseHorizon = doseHorizon ?? horizon;
+  const [futureActions, setFutureActions] = useState<number[]>(Array(effectiveDoseHorizon).fill(0));
   const [addedRow, setAddedRow] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
   const lastRowRef = useRef<HTMLDivElement>(null);
 
-  // Future doses start on the interval after the last real observation.
-  const observedDoseCount = Math.max(0, readonlyOutcomes.length - 1);
-  const numFutureActions = Math.max(0, horizon - observedDoseCount);
+  // Future doses start after the last observed dose. Outcomes are week points,
+  // while dose values are treatment-week intervals, so use the actual dose count.
+  const observedDoseCount = Math.min(effectiveDoseHorizon, Math.max(0, readonlyActions.length));
+  const numFutureActions = Math.max(0, effectiveDoseHorizon - observedDoseCount);
 
   // Only keep the correct number of future actions in state
   useEffect(() => {
@@ -156,52 +160,40 @@ export default function ManualScheduleForm({
               <div className="font-semibold">Status</div>
             </div>
             <div className="divide-y divide-gray-100">
-              {/* Read-only past data */}
+              {/* Read-only past data — skip unobserved slots (null / NaN) */}
               {readonlyOutcomes.map((outcome, i) => {
-                const isLast = i === readonlyOutcomes.length - 1;
+                if (outcome == null || !Number.isFinite(outcome as number)) return null;
                 return (
-                  <div className="grid grid-cols-4 gap-2 px-2 py-3 items-center" key={`row-${i}`} ref={isLast ? lastRowRef : null}>
+                  <div className="grid grid-cols-4 gap-2 px-2 py-3 items-center" key={`row-${i}`}>
                     <div>{i}</div>
                     <div>
                       <input
                         type="text"
-                        value={outcome.toFixed(2)}
+                        value={(outcome as number).toFixed(2)}
                         readOnly
                         className="px-3 py-2 border rounded w-full bg-gray-100 text-gray-500"
                       />
                     </div>
                     <div>
-                      {isLast && numFutureActions > 0 ? (
-                        <input
-                          type="number"
-                          min="0"
-                          max={maxDose}
-                          step="any"
-                          value={futureActions[0]}
-                          onChange={e => updateAction(0, e.target.value)}
-                          className="px-3 py-2 border rounded w-full"
-                        />
-                      ) : (
-                        <input
-                          type="text"
-                          value={readonlyActions[i] !== null && readonlyActions[i] !== undefined ? Number(readonlyActions[i]).toFixed(2) : ""}
-                          readOnly
-                          className="px-3 py-2 border rounded w-full bg-gray-100 text-gray-500"
-                        />
-                      )}
+                      <input
+                        type="text"
+                        value={readonlyActions[i] !== null && readonlyActions[i] !== undefined ? Number(readonlyActions[i]).toFixed(2) : ""}
+                        readOnly
+                        className="px-3 py-2 border rounded w-full bg-gray-100 text-gray-500"
+                      />
                     </div>
                     <div className="text-gray-400 text-sm">
-                      {isLast && numFutureActions > 0 ? "Observed / Planned" : "Observed"}
+                      Observed
                     </div>
                   </div>
                 );
               })}
               {/* Future planned data */}
-              {Array.from({ length: Math.max(0, numFutureActions - 1) }).map((_, idx) => {
-                const actionIndex = idx + 1;
+              {Array.from({ length: numFutureActions }).map((_, idx) => {
+                const actionIndex = idx;
                 return (
-                  <div className="grid grid-cols-4 gap-2 px-2 py-3 items-center" key={`future-row-${idx}`}>
-                    <div>{readonlyOutcomes.length + idx}</div>
+                  <div className="grid grid-cols-4 gap-2 px-2 py-3 items-center" key={`future-row-${idx}`} ref={idx === numFutureActions - 1 ? lastRowRef : null}>
+                    <div>{observedDoseCount + idx}</div>
                     <div>
                       <input
                         type="text"
@@ -230,7 +222,7 @@ export default function ManualScheduleForm({
             </div>
           </div>
           <div className="text-sm text-gray-500 mt-2">
-            Max Dose: {maxDose} hours | Horizon: {horizon} weeks
+            Max Dose: {maxDose} hours | Dose weeks: 0–{effectiveDoseHorizon - 1}{effectiveDoseHorizon < horizon ? ` (prediction extends to week ${horizon - 1})` : ""}
           </div>
         </div>
         {/* Right: Quick Presets Panel */}

@@ -1,3 +1,17 @@
+export interface PredBand {
+    median: number[];
+    lower:  number[];
+    upper:  number[];
+}
+
+export interface PatientPred {
+    mal:     PredBand;
+    uefm:    PredBand;
+    wmft:    PredBand;
+    latentS: number[];   // structural recovery state, 0–1
+    latentR: number[];   // motor memory state, 0–1
+}
+
 export interface Patient {
     // User-defined on creation.
     name: string;
@@ -10,6 +24,8 @@ export interface Patient {
 
     // Fixed horizon.
     horizon: number;
+    // Max week doses can be applied (defaults to horizon when absent).
+    doseHorizon?: number;
 
     // Used to keep track of past data.
     past: boolean;
@@ -20,6 +36,9 @@ export interface Patient {
     // Sparse secondary outcome scores for past patients.
     observedUefm?: (number | null)[];
     observedWmft?: (number | null)[];
+
+    // Prediction CI for past patients (populated by enrichWithTrajectory)
+    pred?: PatientPred;
 
     // Created on registering model with mlflow.
     id: string;

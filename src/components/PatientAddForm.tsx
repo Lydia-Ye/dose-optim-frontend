@@ -12,14 +12,14 @@ interface PatientAddFormProps {
 
 export default function PatientAddForm({ patients, setPatients, setShowForm }: PatientAddFormProps) {
     const [name, setName] = useState("");
-    const [budget, setBudget] = useState(60);
-    const [maxDose, setMaxDose] = useState(20);
+    const [budget, setBudget] = useState(30);
+    const [maxDose, setMaxDose] = useState(10);
     const [age, setAge] = useState(80);
     const [weeksSinceStroke, setWeeksSinceStroke] = useState(15);
     const [leftStroke, setLeftStroke] = useState(true);
     const [male, setMale] = useState(true);
     // Horizon input in weeks
-    const [horizonWeeks, setHorizonWeeks] = useState(20);
+    const [horizonWeeks, setHorizonWeeks] = useState(52);
     
     // Loading for adding patient.
     const [addingLoading, setAddingLoading] = useState(false);
@@ -36,7 +36,6 @@ export default function PatientAddForm({ patients, setPatients, setShowForm }: P
 
         // TODO: Error handling.
 
-        const horizonUnits = Math.ceil(horizonWeeks / 2);
         const newPatient: PatientsPostRequest = {
             // User parameters.
             name: name.trim(),
@@ -47,8 +46,8 @@ export default function PatientAddForm({ patients, setPatients, setShowForm }: P
             leftStroke: leftStroke,
             male: male,
 
-            // Fixed horizon.
-            horizon: horizonUnits,
+            // Fixed horizon: total weeks; dose weeks = horizon / 2 (set in API route).
+            horizon: horizonWeeks,
 
             // Past patient state.
             past: false,
@@ -79,13 +78,13 @@ export default function PatientAddForm({ patients, setPatients, setShowForm }: P
         } finally {
             // Reset form state.
             setName("");
-            setBudget(60);
+            setBudget(30);
             setMaxDose(10);
             setAge(75);
             setWeeksSinceStroke(10);
             setLeftStroke(true);
             setMale(true);
-            setHorizonWeeks(10);
+            setHorizonWeeks(52);
 
             // Complete loading and close form.
             setAddingLoading(false);
@@ -119,7 +118,7 @@ export default function PatientAddForm({ patients, setPatients, setShowForm }: P
                         id="budgetInput"
                         value={budget}
                         onChange={(e) => setBudget(Number(e.target.value))}
-                        placeholder="60"
+                        placeholder="30"
                         className="w-full px-4 py-2 border border-[var(--color-border)] rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                         required
                     />
