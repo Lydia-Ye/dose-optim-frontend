@@ -1,11 +1,17 @@
 import { NextResponse } from "next/server";
 import { backendGet, backendPost, toFrontendPatient, BackendPatient, BACKEND_URL } from "@/lib/backend";
 import { adaptiveNotebookPatients } from "@/lib/adaptiveNotebookPatients";
+import { hasAllMetricObservationsBeforeWeek52 } from "@/lib/pastPatientEligibility";
 
 export async function GET() {
   try {
     const patients = await backendGet<BackendPatient[]>("/v1/patients");
-    const pastPatients = patients.map(toFrontendPatient).filter((patient) => patient.past);
+    const pastPatients = patients
+      .map(toFrontendPatient)
+      .filter((patient) => (
+        patient.past &&
+        hasAllMetricObservationsBeforeWeek52(patient.sourceSubjectId)
+      ));
     return NextResponse.json([...adaptiveNotebookPatients, ...pastPatients]);
   } catch (error) {
     console.error(error);

@@ -14,6 +14,7 @@ import {
   ChartOptions,
 } from "chart.js";
 import { Chart } from "react-chartjs-2";
+import { PAST_PATIENT_DISPLAY_WEEKS } from "@/lib/pastPatientConstants";
 
 ChartJS.register(
   LinearScale, BarElement, PointElement, LineElement,
@@ -74,12 +75,6 @@ export default function PastPatientChart({
   const maxDose   = doseData.reduce((m, v) => Math.max(m, v), 0);
   const yRightMax = Math.ceil(maxDose * 2) || 12;
 
-  const xMax = Math.max(
-    predRows.length > 0 ? Math.max(...predRows.map((r) => r.time)) + 1 : 0,
-    doseData.length,
-    obsRows.length > 0  ? Math.max(...obsRows.map((r) => r.time))  + 1 : 0,
-  );
-
   const options: ChartOptions<"line" | "bar"> = {
     animation: false,
     responsive: true,
@@ -87,7 +82,7 @@ export default function PastPatientChart({
       x: {
         type: "linear",
         min: 0,
-        max: xMax,
+        max: PAST_PATIENT_DISPLAY_WEEKS,
         title: { display: true, text: "Time (weeks)" },
         ticks: { maxTicksLimit: 20 },
       },

@@ -1,0 +1,1 @@
+export const PAST_PATIENT_DISPLAY_WEEKS = 52;

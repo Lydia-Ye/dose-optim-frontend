@@ -6,6 +6,7 @@ import { Patient } from "@/types/patient";
 import Badge from "./ui/Badge";
 import Button from "./ui/Button";
 import { useState, useEffect } from "react";
+import { PAST_PATIENT_DISPLAY_WEEKS } from "@/lib/pastPatientConstants";
 
 interface PatientPageProps {
   patient: Patient;
@@ -32,8 +33,6 @@ export default function PastPatientPage({ patient }: PatientPageProps) {
 
   const actions      = patient.actions ?? [];
   const observedMal  = patient.observedMal ?? [];
-  const observedUefm = patient.observedUefm ?? [];
-  const observedWmft = patient.observedWmft ?? [];
   const outcomes     = patient.outcomes ?? [];
 
   // Fetch pre-computed plot data for this past patient
@@ -45,13 +44,6 @@ export default function PastPatientPage({ patient }: PatientPageProps) {
       .catch(() => setPlotData(null));
   }, [patient.sourceSubjectId]);
 
-  // Adaptive x-axis: end at the last week with actual data
-  const lastMalWeek  = observedMal.reduce<number>((max, v, i) => v !== null ? i : max, -1);
-  const lastUefmWeek = observedUefm.reduce<number>((max, v, i) => v !== null ? i : max, -1);
-  const lastWmftWeek = observedWmft.reduce<number>((max, v, i) => v !== null ? i : max, -1);
-  const lastDoseWeek = actions.reduce((max, v, i) => v > 0 ? i : max, -1);
-  const maxWeek      = Math.max(lastMalWeek, lastUefmWeek, lastWmftWeek, lastDoseWeek, 0);
-
   const totalDose    = actions.reduce((a, b) => a + b, 0);
   const lastObserved = [...observedMal].reverse().find(v => v !== null) ?? null;
   const finalMAL     = lastObserved !== null
@@ -61,8 +53,10 @@ export default function PastPatientPage({ patient }: PatientPageProps) {
   const modKey = metricTab.toLowerCase() as "mal" | "uefm" | "wmft";
   const { yLabel, yMax } = METRIC_CONFIG[metricTab];
 
-  const predRows: PlotRow[] = plotData?.[modKey]?.pred ?? [];
-  const obsRows:  ObsRow[]  = plotData?.[modKey]?.obs  ?? [];
+  const predRows: PlotRow[] = (plotData?.[modKey]?.pred ?? [])
+    .filter((row) => row.time <= PAST_PATIENT_DISPLAY_WEEKS);
+  const obsRows:  ObsRow[]  = (plotData?.[modKey]?.obs  ?? [])
+    .filter((row) => row.time <= PAST_PATIENT_DISPLAY_WEEKS);
   const hasData  = predRows.length > 0 || obsRows.length > 0;
 
   return (
@@ -124,7 +118,7 @@ export default function PastPatientPage({ patient }: PatientPageProps) {
             <PastPatientChart
               predRows={predRows}
               obsRows={obsRows}
-              doseData={actions.slice(0, maxWeek + 1)}
+              doseData={actions.slice(0, PAST_PATIENT_DISPLAY_WEEKS)}
               metric={metricTab}
               yLabel={yLabel}
               yMax={yMax}
