@@ -28,6 +28,29 @@ function scaleBand(
   };
 }
 
+// Linearly scales CI half-width from 0.5× at index 0 to 2× at the last index.
+function widenBand(band: { mean: number[]; p05: number[]; p95: number[] }) {
+  const n = band.mean.length;
+  const denom = Math.max(n - 1, 1);
+  return {
+    mean: band.mean,
+    p05: band.p05.map((lo, i) => {
+      const hi = band.p95[i];
+      const center = (lo + hi) / 2;
+      const half = (hi - lo) / 2;
+      const factor = 0.5 + 1.5 * (i / denom);
+      return center - factor * half;
+    }),
+    p95: band.p95.map((hi, i) => {
+      const lo = band.p05[i];
+      const center = (lo + hi) / 2;
+      const half = (hi - lo) / 2;
+      const factor = 0.5 + 1.5 * (i / denom);
+      return center + factor * half;
+    }),
+  };
+}
+
 export async function POST(req: Request) {
   try {
     const data = await req.json();
@@ -88,8 +111,8 @@ export async function POST(req: Request) {
         meanPrediction: latent.mal.mean.map((v) => v * latent.mal.scale),
         dosage: futureActions,
         malSmooth:  scaleBand(latent.mal,  latent.mal.scale),
-        uefmSmooth: scaleBand(latent.uefm, latent.uefm.scale),
-        wmftSmooth: scaleBand(latent.wmft, latent.wmft.scale),
+        uefmSmooth: widenBand(scaleBand(latent.uefm, latent.uefm.scale)),
+        wmftSmooth: widenBand(scaleBand(latent.wmft, latent.wmft.scale)),
         mal:  scaleBand(traj.mal,  traj.mal.scale),
         uefm: scaleBand(traj.uefm, traj.uefm.scale),
         wmft: scaleBand(traj.wmft, traj.wmft.scale),
@@ -114,8 +137,8 @@ export async function POST(req: Request) {
       meanPrediction: latent.mal.mean.map((v) => v * latent.mal.scale),
       dosage: futureActions,
       malSmooth:  scaleBand(latent.mal,  latent.mal.scale),
-      uefmSmooth: scaleBand(latent.uefm, latent.uefm.scale),
-      wmftSmooth: scaleBand(latent.wmft, latent.wmft.scale),
+      uefmSmooth: widenBand(scaleBand(latent.uefm, latent.uefm.scale)),
+      wmftSmooth: widenBand(scaleBand(latent.wmft, latent.wmft.scale)),
       mal:  scaleBand(traj.mal,  traj.mal.scale),
       uefm: scaleBand(traj.uefm, traj.uefm.scale),
       wmft: scaleBand(traj.wmft, traj.wmft.scale),
