@@ -80,6 +80,11 @@ export default function NewPatientPage({ patient, setPatient }: PatientPageProps
       const requestBody = {
         id: patient.id,
         future_actions: fullSchedule,
+        delivered_doses_hours: pastDoses,
+        observed_mal: patient.observedMal ?? pastAvgOut,
+        observed_uefm: patient.observedUefm ?? [],
+        observed_wmft: patient.observedWmft ?? [],
+        snapshot_week: Math.max(0, pastDoses.length - 1),
       };
 
       const res = await fetch("/api/manual-predict", {
@@ -112,7 +117,7 @@ export default function NewPatientPage({ patient, setPatient }: PatientPageProps
     } catch (err) {
       console.error("Manual schedule prediction error:", err);
     }
-  }, [doseHorizon, patient.horizon, patient.id, pastDoseData]);
+  }, [doseHorizon, pastAvgOut, pastDoseData, patient.horizon, patient.id, patient.observedMal, patient.observedUefm, patient.observedWmft]);
 
   const handleDataUpdated = (
     newAvgOut: number[],
@@ -155,7 +160,14 @@ export default function NewPatientPage({ patient, setPatient }: PatientPageProps
       const res = await fetch("/api/optimize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: patient.id }),
+        body: JSON.stringify({
+          id: patient.id,
+          delivered_doses_hours: pastDoseData.slice(0, doseHorizon),
+          observed_mal: patient.observedMal ?? pastAvgOut,
+          observed_uefm: patient.observedUefm ?? [],
+          observed_wmft: patient.observedWmft ?? [],
+          snapshot_week: Math.max(0, pastDoseData.length - 1),
+        }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -182,7 +194,7 @@ export default function NewPatientPage({ patient, setPatient }: PatientPageProps
     } finally {
       setCemLoading(false);
     }
-  }, [patient.id]);
+  }, [doseHorizon, pastAvgOut, pastDoseData, patient.id, patient.observedMal, patient.observedUefm, patient.observedWmft]);
 
   const totalDose = pastDoseData.reduce((a, b) => a + b, 0);
   const currentMAL = Math.round(pastAvgOut[pastAvgOut.length - 1] * 1000) / 1000;

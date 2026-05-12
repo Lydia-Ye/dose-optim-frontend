@@ -51,6 +51,12 @@ function widenBand(band: { mean: number[]; p05: number[]; p95: number[] }) {
   };
 }
 
+function finiteAt(values: unknown, index: number): number | undefined {
+  if (!Array.isArray(values)) return undefined;
+  const value = Number(values[index]);
+  return Number.isFinite(value) ? value : undefined;
+}
+
 export async function POST(req: Request) {
   try {
     const data = await req.json();
@@ -74,19 +80,48 @@ export async function POST(req: Request) {
       const wmftObs    = isSubject2 ? subject2Wmft   : subject1Wmft;
       const pastDoses  = isSubject2 ? subject2Doses  : subject1Doses;
 
-      // Observations for HMC: weeks 1 through NOTEBOOK_SNAPSHOT_WEEK (week 0 unobserved)
-      const obsCount = NOTEBOOK_SNAPSHOT_WEEK;   // 7 observations at weeks 1..7
-      const obs_weeks = Array.from({ length: obsCount }, (_, i) => i + 1);  // [1,2,...,7]
-      // Normalise to [0,1] for Stan (clinical units → model units); slice indices 1..7
-      const obs_mal  = malObs.slice(1, 1 + obsCount).map((v) => v / 5.0);
-      const obs_uefm = uefmObs.slice(1, 1 + obsCount).map((v) => v / 66.0);
-      const obs_wmft = wmftObs.slice(1, 1 + obsCount);     // already [0,1]
+      const submittedDoses = Array.isArray(data.delivered_doses_hours)
+        ? data.delivered_doses_hours.map((v: unknown) => Number(v))
+        : [];
+      const requestedSnapshot = Number(data.snapshot_week);
+      const snapshotWeek = Math.max(
+        1,
+        Math.min(
+          NOTEBOOK_HORIZON_WEEKS - 1,
+          Number.isFinite(requestedSnapshot)
+            ? Math.floor(requestedSnapshot)
+            : Math.max(NOTEBOOK_SNAPSHOT_WEEK, submittedDoses.length - 1),
+        ),
+      );
 
-      // Full dose schedule: past doses weeks 0..SNAPSHOT fixed from notebook, future from user
-      const pastDoseCutoff = NOTEBOOK_SNAPSHOT_WEEK + 1;   // 8
+      // Observations for HMC: weeks 1 through the displayed snapshot
+      // (week 0 is unobserved in the notebook).
+      const obs_weeks = Array.from({ length: snapshotWeek }, (_, i) => i + 1);
+      const obs_mal = obs_weeks.map((week) => (
+        (finiteAt(data.observed_mal, week) ?? malObs[week]) / 5.0
+      ));
+      const obs_uefm = obs_weeks.map((week) => (
+        (finiteAt(data.observed_uefm, week) ?? uefmObs[week]) / 66.0
+      ));
+      const obs_wmft = obs_weeks.map((week) => (
+        finiteAt(data.observed_wmft, week) ?? wmftObs[week]
+      ));
+
+      // Full dose schedule: past doses weeks 0..SNAPSHOT fixed from notebook,
+      // future doses from the submitted manual schedule. The current client
+      // sends a full-horizon array, but accepting future-only arrays keeps this
+      // endpoint aligned with the API field name and avoids silent week shifts.
+      const pastDoseCutoff = snapshotWeek + 1;
+      const futureScheduleOffset = futureActions.length === NOTEBOOK_HORIZON_WEEKS
+        ? 0
+        : pastDoseCutoff;
       const future_doses_hours = Array.from(
         { length: NOTEBOOK_HORIZON_WEEKS },
-        (_, i) => (i < pastDoseCutoff ? pastDoses[i] : Number(futureActions[i] ?? 0)),
+        (_, week) => (
+          week < pastDoseCutoff
+            ? (Number.isFinite(submittedDoses[week]) ? submittedDoses[week] : pastDoses[week])
+            : Number(futureActions[week - futureScheduleOffset] ?? 0)
+        ),
       );
 
       const model = await backendPost<BackendModelResponse>("/v1/hmc-predict", {
@@ -109,7 +144,7 @@ export async function POST(req: Request) {
         maxPrediction:  latent.mal.p95.map((v) => v * latent.mal.scale),
         minPrediction:  latent.mal.p05.map((v) => v * latent.mal.scale),
         meanPrediction: latent.mal.mean.map((v) => v * latent.mal.scale),
-        dosage: futureActions,
+        dosage: future_doses_hours,
         malSmooth:  scaleBand(latent.mal,  latent.mal.scale),
         uefmSmooth: widenBand(scaleBand(latent.uefm, latent.uefm.scale)),
         wmftSmooth: widenBand(scaleBand(latent.wmft, latent.wmft.scale)),

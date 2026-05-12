@@ -56,6 +56,12 @@ function widenBand(band: { mean: number[]; p05: number[]; p95: number[] }) {
   };
 }
 
+function finiteAt(values: unknown, index: number): number | undefined {
+  if (!Array.isArray(values)) return undefined;
+  const value = Number(values[index]);
+  return Number.isFinite(value) ? value : undefined;
+}
+
 export async function POST(req: Request) {
   try {
     const data = await req.json();
@@ -81,12 +87,34 @@ export async function POST(req: Request) {
       const uefmObs    = isSubject2 ? subject2Uefm   : subject1Uefm;
       const wmftObs    = isSubject2 ? subject2Wmft   : subject1Wmft;
       const pastDoses  = isSubject2 ? subject2Doses  : subject1Doses;
-      // Observations at weeks 1..NOTEBOOK_SNAPSHOT_WEEK (week 0 is unobserved in notebook)
-      const obsCount = NOTEBOOK_SNAPSHOT_WEEK;   // 7 observations at weeks 1..7
-      const obs_weeks = Array.from({ length: obsCount }, (_, i) => i + 1);  // [1,2,...,7]
-      const obs_mal  = malObs.slice(1, 1 + obsCount).map((v) => v / 5.0);
-      const obs_uefm = uefmObs.slice(1, 1 + obsCount).map((v) => v / 66.0);
-      const obs_wmft = wmftObs.slice(1, 1 + obsCount);
+      const submittedDoses = Array.isArray(data.delivered_doses_hours)
+        ? data.delivered_doses_hours.map((v: unknown) => Number(v))
+        : [];
+      const requestedSnapshot = Number(data.snapshot_week);
+      const snapshotWeek = Math.max(
+        1,
+        Math.min(
+          NOTEBOOK_HORIZON_WEEKS - 1,
+          Number.isFinite(requestedSnapshot)
+            ? Math.floor(requestedSnapshot)
+            : Math.max(NOTEBOOK_SNAPSHOT_WEEK, submittedDoses.length - 1),
+        ),
+      );
+      // Observations at weeks 1..snapshotWeek (week 0 is unobserved in notebook)
+      const obs_weeks = Array.from({ length: snapshotWeek }, (_, i) => i + 1);
+      const obs_mal = obs_weeks.map((week) => (
+        (finiteAt(data.observed_mal, week) ?? malObs[week]) / 5.0
+      ));
+      const obs_uefm = obs_weeks.map((week) => (
+        (finiteAt(data.observed_uefm, week) ?? uefmObs[week]) / 66.0
+      ));
+      const obs_wmft = obs_weeks.map((week) => (
+        finiteAt(data.observed_wmft, week) ?? wmftObs[week]
+      ));
+      const deliveredDoses = Array.from(
+        { length: snapshotWeek + 1 },
+        (_, week) => Number.isFinite(submittedDoses[week]) ? submittedDoses[week] : (pastDoses[week] ?? 0),
+      );
 
       const model = await backendPost<BackendModelResponse>("/v1/hmc-predict", {
         group:              ctx.g,
@@ -98,25 +126,25 @@ export async function POST(req: Request) {
         obs_wmft,
         future_doses_hours: Array.from({ length: NOTEBOOK_HORIZON_WEEKS }, () => 0),
         optimize_cem:       true,
-        delivered_doses_hours: pastDoses.slice(0, NOTEBOOK_SNAPSHOT_WEEK + 1),
+        delivered_doses_hours: deliveredDoses,
         budget_hours:       patient.budget,
         dose_horizon_weeks: patient.doseHorizon,
         max_dose_hours:     patient.maxDose,
-        planning_week:      NOTEBOOK_SNAPSHOT_WEEK + 1,
+        planning_week:      snapshotWeek + 1,
         horizon_weeks:      NOTEBOOK_HORIZON_WEEKS,
         n_mc:               200,
-        seed:               9000 + (isSubject2 ? 100 : 0) + NOTEBOOK_SNAPSHOT_WEEK,
+        seed:               9000 + (isSubject2 ? 100 : 0) + snapshotWeek,
         cem_n_samples:      250,
         cem_n_iters:        45,
-        cem_seed:           (isSubject2 ? 100 : 0) + NOTEBOOK_SNAPSHOT_WEEK + 1,
+        cem_seed:           (isSubject2 ? 100 : 0) + snapshotWeek + 1,
       });
 
       const { trajectories: traj, latent_trajectories: latent, latent_states: states } = model;
       const cemScheduleHours = model.recommended_schedule?.dose_hours_per_week ?? [];
-      const observedDoseCutoff = NOTEBOOK_SNAPSHOT_WEEK + 1;
+      const observedDoseCutoff = snapshotWeek + 1;
       const scheduleHours = Array.from({ length: NOTEBOOK_HORIZON_WEEKS }, (_, week) => (
         week < observedDoseCutoff
-          ? (pastDoses[week] ?? 0)
+          ? (deliveredDoses[week] ?? 0)
           : (cemScheduleHours[week] ?? 0)
       ));
 
