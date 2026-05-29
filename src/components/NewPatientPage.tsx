@@ -68,7 +68,7 @@ export default function NewPatientPage({ patient, setPatient }: PatientPageProps
     try {
       // Preserve every observed dose, then append planned future doses.
       // Cap at doseHorizon so doses beyond that week are never sent to the model.
-      const pastDoses = pastDoseData.slice(0, doseHorizon);
+      const pastDoses = pastDoseData.slice(0, doseHorizon).map((d) => d ?? 0);
       const doseSchedule = [...pastDoses, ...futureActions].slice(0, doseHorizon);
       // Pad to full horizon so the backend receives exactly horizon_weeks elements.
       // Weeks beyond doseHorizon are zero (no treatment), letting the model simulate natural decay.
@@ -127,6 +127,8 @@ export default function NewPatientPage({ patient, setPatient }: PatientPageProps
       observedUefm: (number | null)[];
       observedWmft: (number | null)[];
     },
+    newUefm?: (number | null)[],
+    newWmft?: (number | null)[],
   ) => {
     setPastAvgOut(newAvgOut);
     setPastDoseData(newDoseData as number[]);
@@ -134,16 +136,14 @@ export default function NewPatientPage({ patient, setPatient }: PatientPageProps
     setCemPrediction(emptyPrediction);
     setCemSchedule([]);
     setShowManual(false);
-    if (snapshotData) {
-      setPatient((current) => current ? {
-        ...current,
-        outcomes: newAvgOut,
-        actions: newDoseData as number[],
-        observedMal: snapshotData.observedMal,
-        observedUefm: snapshotData.observedUefm,
-        observedWmft: snapshotData.observedWmft,
-      } : current);
-    }
+    setPatient((current) => current ? {
+      ...current,
+      outcomes: newAvgOut,
+      actions: newDoseData as number[],
+      observedMal: snapshotData?.observedMal ?? newAvgOut,
+      observedUefm: snapshotData?.observedUefm ?? newUefm ?? current.observedUefm,
+      observedWmft: snapshotData?.observedWmft ?? newWmft ?? current.observedWmft,
+    } : current);
   };
 
   const handleCloseManualScheduleForm = () => {
@@ -240,6 +240,8 @@ export default function NewPatientPage({ patient, setPatient }: PatientPageProps
             <UploadDataForm
               patientID={patient.id}
               pastAvgOut={pastAvgOut}
+              pastObservedUefm={patient.observedUefm ?? undefined}
+              pastObservedWmft={patient.observedWmft ?? undefined}
               pastDoseData={pastDoseData}
               setShowForm={setShowUploadForm}
               onDataUpdated={handleDataUpdated}

@@ -27,7 +27,6 @@ export default function ManualScheduleForm({
   onClose,
 }: ManualScheduleFormProps) {
   const effectiveDoseHorizon = doseHorizon ?? horizon;
-  const [futureActions, setFutureActions] = useState<number[]>(Array(effectiveDoseHorizon).fill(0));
   const [addedRow, setAddedRow] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
   const lastRowRef = useRef<HTMLDivElement>(null);
@@ -37,9 +36,23 @@ export default function ManualScheduleForm({
   const observedDoseCount = Math.min(effectiveDoseHorizon, Math.max(0, readonlyActions.length));
   const numFutureActions = Math.max(0, effectiveDoseHorizon - observedDoseCount);
 
-  // Only keep the correct number of future actions in state
+  // Default to flat distribution over all remaining weeks instead of zeros.
+  const computeDefaultActions = (n: number): number[] => {
+    if (n === 0) return [];
+    const pastSpent = readonlyActions
+      .slice(0, observedDoseCount)
+      .reduce((sum, d) => sum + (d ?? 0), 0);
+    const remaining = Math.max(0, budget - pastSpent);
+    const flatDose = remaining > 0 ? Math.min(remaining / n, maxDose) : 0;
+    return Array(n).fill(Math.round(flatDose * 100) / 100);
+  };
+
+  const [futureActions, setFutureActions] = useState<number[]>(() => computeDefaultActions(numFutureActions));
+
+  // Reset when the number of future weeks changes (e.g. after observation update).
   useEffect(() => {
-    setFutureActions(Array(numFutureActions).fill(0));
+    setFutureActions(computeDefaultActions(numFutureActions));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [numFutureActions]);
 
   const updateAction = (index: number, value: string) => {

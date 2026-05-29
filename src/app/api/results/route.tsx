@@ -11,7 +11,7 @@ export async function POST() {
 
 export async function PUT(req: Request) {
   try {
-    const { patientID, pastAvgOutState, pastDoseDataState } = await req.json() as ResultsPutRequest;
+    const { patientID, pastAvgOutState, pastUefmState, pastWmftState, pastDoseDataState } = await req.json() as ResultsPutRequest;
     const current = await backendGet<BackendPatient>(`/v1/patients/${patientID}`);
 
     // Upsert one observation per time step
@@ -20,6 +20,8 @@ export async function PUT(req: Request) {
         week: i,
         dose_hours: pastDoseDataState[i] ?? 0,
         mal_score: pastAvgOutState[i] ?? null,
+        uefm_score: pastUefmState?.[i] ?? null,
+        wmft_score: pastWmftState?.[i] ?? null,
       };
 
       const res = await fetch(`${BACKEND_URL}/v1/patients/${patientID}/observations`, {

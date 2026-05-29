@@ -62,10 +62,10 @@ const MAL_HIDDEN = [
   "Manual Schedule Max Outcome", "Manual Schedule Min Outcome",
   "CEM Max Outcome", "CEM Min Outcome",
 ];
-const PREDICTION_BLUE   = "rgb(100, 160, 240)";
-const PREDICTION_BLUE_FILL = "rgba(100, 160, 240, 0.1)";
-const CEM_PURPLE        = "rgb(147, 51, 234)";
-const CEM_PURPLE_FILL   = "rgba(147, 51, 234, 0.10)";
+const MANUAL_YELLOW      = "rgb(251, 176, 59)";
+const MANUAL_YELLOW_FILL = "rgba(251, 176, 59, 0.15)";
+const CEM_PURPLE         = "rgb(147, 51, 234)";
+const CEM_PURPLE_FILL    = "rgba(147, 51, 234, 0.10)";
 
 export default function CurrentPredictChart({
   pastAvgOut,
@@ -242,7 +242,7 @@ export default function CurrentPredictChart({
         ? (pastDoseData[w] ?? null)
         : (hasFutureSchedule ? (futureDoseSource[w] ?? null) : null),
     });
-    doseColors.push(isPast ? "rgb(34, 139, 34)" : "rgba(134, 210, 134, 0.8)");
+    doseColors.push(isPast ? "rgb(34, 139, 34)" : "rgba(251, 176, 59, 0.75)");
   }
 
   // CEM future dose bars — only built when both manual and CEM are active
@@ -328,14 +328,14 @@ export default function CurrentPredictChart({
             {
               type: "line" as const,
               label: `${metric} Mean Trajectory`,
-              borderColor: PREDICTION_BLUE,
-              backgroundColor: PREDICTION_BLUE_FILL,
+              borderColor: MANUAL_YELLOW,
+              backgroundColor: MANUAL_YELLOW_FILL,
               borderWidth: 2,
               borderDash: [2, 5],
               borderCapStyle: "round" as const,
               pointRadius: 4,
               pointHoverRadius: 6,
-              pointBackgroundColor: PREDICTION_BLUE,
+              pointBackgroundColor: MANUAL_YELLOW,
               tension: 0,
               yAxisID: "y-left",
               fill: false,
@@ -344,8 +344,8 @@ export default function CurrentPredictChart({
             {
               type: "line" as const,
               label: smoothBandUpperLabel,
-              borderColor: "rgba(30, 90, 200, 0)",
-              backgroundColor: "rgba(30, 90, 200, 0.12)",
+              borderColor: "rgba(251, 176, 59, 0)",
+              backgroundColor: MANUAL_YELLOW_FILL,
               pointRadius: 0,
               pointHoverRadius: 0,
               yAxisID: "y-left",
@@ -354,8 +354,8 @@ export default function CurrentPredictChart({
             {
               type: "line" as const,
               label: smoothBandLowerLabel,
-              borderColor: "rgba(30, 90, 200, 0)",
-              backgroundColor: "rgba(30, 90, 200, 0.12)",
+              borderColor: "rgba(251, 176, 59, 0)",
+              backgroundColor: MANUAL_YELLOW_FILL,
               pointRadius: 0,
               pointHoverRadius: 0,
               yAxisID: "y-left",
@@ -375,7 +375,7 @@ export default function CurrentPredictChart({
                     type: "line" as const,
                     label: "Manual Schedule Prediction",
                     borderColor: "rgb(100, 160, 240)",
-                    backgroundColor: "rgba(100, 160, 240, 0.1)",
+                    backgroundColor: MANUAL_YELLOW_FILL,
                     borderWidth: 1.5,
                     borderDash: [5, 5],
                     pointRadius: 3,
@@ -389,7 +389,7 @@ export default function CurrentPredictChart({
                   {
                     type: "line" as const,
                     label: "Manual Schedule Max Outcome",
-                    backgroundColor: "rgba(100, 160, 240, 0.15)",
+                    backgroundColor: MANUAL_YELLOW_FILL,
                     borderColor: "rgba(100, 160, 240, 0)",
                     pointRadius: 0,
                     pointHoverRadius: 0,
@@ -399,7 +399,7 @@ export default function CurrentPredictChart({
                   {
                     type: "line" as const,
                     label: "Manual Schedule Min Outcome",
-                    backgroundColor: "rgba(100, 160, 240, 0.15)",
+                    backgroundColor: MANUAL_YELLOW_FILL,
                     borderColor: "rgba(100, 160, 240, 0)",
                     pointRadius: 0,
                     pointHoverRadius: 0,
@@ -498,8 +498,7 @@ export default function CurrentPredictChart({
         type: "bar" as const,
         label: hasManual && hasCem ? "Manual Dose Schedule" : "Dose Schedule",
         backgroundColor: doseColors,
-        borderColor: "white",
-        borderWidth: 1,
+        borderWidth: 0,
         yAxisID: "y-right",
         barPercentage: compareDoseBars ? 0.52 : doseBarPercentage,
         ...(effectiveDoseBarThickness != null ? { barThickness: effectiveDoseBarThickness } : {}),
@@ -509,8 +508,7 @@ export default function CurrentPredictChart({
         type: "bar" as const,
         label: "CEM Dose Schedule",
         backgroundColor: "rgba(147, 51, 234, 0.5)",
-        borderColor: "white",
-        borderWidth: 1,
+        borderWidth: 0,
         yAxisID: "y-right",
         barPercentage: 0.52,
         ...(effectiveDoseBarThickness != null ? { barThickness: effectiveDoseBarThickness } : {}),

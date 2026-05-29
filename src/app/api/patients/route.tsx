@@ -6,13 +6,13 @@ import { hasAllMetricObservationsBeforeWeek52 } from "@/lib/pastPatientEligibili
 export async function GET() {
   try {
     const patients = await backendGet<BackendPatient[]>("/v1/patients");
-    const pastPatients = patients
-      .map(toFrontendPatient)
-      .filter((patient) => (
-        patient.past &&
-        hasAllMetricObservationsBeforeWeek52(patient.sourceSubjectId)
-      ));
-    return NextResponse.json([...adaptiveNotebookPatients, ...pastPatients]);
+    const mapped = patients.map(toFrontendPatient);
+    const activeDbPatients = mapped.filter((p) => !p.past);
+    const pastPatients = mapped.filter((p) => (
+      p.past &&
+      hasAllMetricObservationsBeforeWeek52(p.sourceSubjectId)
+    ));
+    return NextResponse.json([...adaptiveNotebookPatients, ...activeDbPatients, ...pastPatients]);
   } catch (error) {
     console.error(error);
     return NextResponse.json({ error: "Failed to fetch patients" }, { status: 500 });

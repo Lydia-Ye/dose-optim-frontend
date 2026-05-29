@@ -13,6 +13,8 @@ import {
 interface UploadDataFormProps {
     patientID: string;
     pastAvgOut: number[];
+    pastObservedUefm?: (number | null)[];
+    pastObservedWmft?: (number | null)[];
     pastDoseData: (number|null)[];
     setShowForm: React.Dispatch<React.SetStateAction<boolean>>;
     onDataUpdated?: (
@@ -23,15 +25,21 @@ interface UploadDataFormProps {
             observedUefm: (number | null)[];
             observedWmft: (number | null)[];
         },
+        newUefm?: (number | null)[],
+        newWmft?: (number | null)[],
     ) => void;
 }
 
-export default function UploadDataForm({ patientID, pastAvgOut, pastDoseData, setShowForm, onDataUpdated }: UploadDataFormProps) {
+export default function UploadDataForm({ patientID, pastAvgOut, pastObservedUefm, pastObservedWmft, pastDoseData, setShowForm, onDataUpdated }: UploadDataFormProps) {
     // Stores uploaded CSV file data.
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // State for chart plotting.
     const [pastAvgOutState, setPastAvgOutState] = useState(pastAvgOut);
+    const [uefmState, setUefmState] = useState<(number | null)[]>(pastObservedUefm ?? pastAvgOut.map(() => null));
+    const [wmftState, setWmftState] = useState<(number | null)[]>(pastObservedWmft ?? pastAvgOut.map(() => null));
+    const [uefmInputs, setUefmInputs] = useState<string[]>((pastObservedUefm ?? pastAvgOut.map(() => null)).map(v => v == null ? "" : String(v)));
+    const [wmftInputs, setWmftInputs] = useState<string[]>((pastObservedWmft ?? pastAvgOut.map(() => null)).map(v => v == null ? "" : String(v)));
     const [pastDoseDataState, setPastDoseDataState] = useState(pastDoseData);
     const [pastDoseDataStateInputs, setPastDoseDataStateInputs] = useState(pastDoseData.map(item => item === null ? "" : String(item)));
     const [validationError, setValidationError] = useState<string | null>(null);
@@ -130,6 +138,34 @@ export default function UploadDataForm({ patientID, pastAvgOut, pastDoseData, se
         setPastAvgOutState(newOutcomeState);
     }
 
+    const updateUefmState = (index: number, val: string) => {
+        const newInputs = [...uefmInputs];
+        newInputs[index] = val;
+        setUefmInputs(newInputs);
+        if (val === "") {
+            const next = [...uefmState]; next[index] = null; setUefmState(next);
+        } else {
+            const n = Number(val);
+            if (isNaN(n)) { setValidationError("Please enter a valid number for UEFM Score"); return; }
+            setValidationError(null);
+            const next = [...uefmState]; next[index] = n; setUefmState(next);
+        }
+    }
+
+    const updateWmftState = (index: number, val: string) => {
+        const newInputs = [...wmftInputs];
+        newInputs[index] = val;
+        setWmftInputs(newInputs);
+        if (val === "") {
+            const next = [...wmftState]; next[index] = null; setWmftState(next);
+        } else {
+            const n = Number(val);
+            if (isNaN(n)) { setValidationError("Please enter a valid number for WMFT Score"); return; }
+            setValidationError(null);
+            const next = [...wmftState]; next[index] = n; setWmftState(next);
+        }
+    }
+
     // Function to update dose state.
     const updateDoseState = (index: number, newDose: string) => {
         const newDoseState = [...pastDoseDataState];
@@ -155,37 +191,36 @@ export default function UploadDataForm({ patientID, pastAvgOut, pastDoseData, se
 
     // Function to add new outcome / dose pair.
     const addStatePair = () => {
-        const newOutcomeState = [...pastAvgOutState];
-        newOutcomeState.push(3.0);
-        setPastAvgOutState(newOutcomeState);
-
-        const newDoseState = [...pastDoseDataState];
-        newDoseState.push(null);
-        setPastDoseDataState(newDoseState);
-
-        const newDoseStateInputs = [...pastDoseDataStateInputs];
-        newDoseStateInputs.push("");
-        setPastDoseDataStateInputs(newDoseStateInputs);
+        setPastAvgOutState([...pastAvgOutState, 3.0]);
+        setUefmState([...uefmState, null]);
+        setWmftState([...wmftState, null]);
+        setUefmInputs([...uefmInputs, ""]);
+        setWmftInputs([...wmftInputs, ""]);
+        setPastDoseDataState([...pastDoseDataState, null]);
+        setPastDoseDataStateInputs([...pastDoseDataStateInputs, ""]);
     }
 
     // Function to remove outcome / dose pair.
     const removeStatePair = (index: number) => {
-        const newOutcomeState = [...pastAvgOutState];
-        newOutcomeState.splice(index, 1);
-        setPastAvgOutState(newOutcomeState);
-
-        const newDoseState = [...pastDoseDataState];
-        newDoseState.splice(index, 1);
-        setPastDoseDataState(newDoseState);
-
-        const newDoseStateInputs = [...pastDoseDataStateInputs];
-        newDoseStateInputs.splice(index, 1);
-        setPastDoseDataStateInputs(newDoseStateInputs);
+        const splice = <T,>(arr: T[]) => { const next = [...arr]; next.splice(index, 1); return next; };
+        setPastAvgOutState(splice(pastAvgOutState));
+        setUefmState(splice(uefmState));
+        setWmftState(splice(wmftState));
+        setUefmInputs(splice(uefmInputs));
+        setWmftInputs(splice(wmftInputs));
+        setPastDoseDataState(splice(pastDoseDataState));
+        setPastDoseDataStateInputs(splice(pastDoseDataStateInputs));
     }
 
     // Function to revert changes
     const revertChanges = () => {
+        const initUefm = pastObservedUefm ?? pastAvgOut.map(() => null);
+        const initWmft = pastObservedWmft ?? pastAvgOut.map(() => null);
         setPastAvgOutState(pastAvgOut);
+        setUefmState(initUefm);
+        setWmftState(initWmft);
+        setUefmInputs(initUefm.map(v => v == null ? "" : String(v)));
+        setWmftInputs(initWmft.map(v => v == null ? "" : String(v)));
         setPastDoseDataState(pastDoseData);
         setPastDoseDataStateInputs(pastDoseData.map(item => item === null ? "" : String(item)));
         setValidationError(null);
@@ -195,7 +230,13 @@ export default function UploadDataForm({ patientID, pastAvgOut, pastDoseData, se
         const snapshot = getAdaptiveNotebookSnapshot(patientID, week);
         if (!snapshot) return;
 
+        const snapUefm = snapshot.observedUefm.map(v => v == null ? null : v as number | null);
+        const snapWmft = snapshot.observedWmft.map(v => v == null ? null : v as number | null);
         setPastAvgOutState(snapshot.outcomes);
+        setUefmState(snapUefm);
+        setWmftState(snapWmft);
+        setUefmInputs(snapUefm.map(v => v == null ? "" : String(v)));
+        setWmftInputs(snapWmft.map(v => v == null ? "" : String(v)));
         setPastDoseDataState(snapshot.actions);
         setPastDoseDataStateInputs(snapshot.actions.map(item => item === null ? "" : String(item)));
         setValidationError(null);
@@ -216,8 +257,10 @@ export default function UploadDataForm({ patientID, pastAvgOut, pastDoseData, se
         e.preventDefault();
         if (!isEditing) return;
         
-        // Validate all data before submission
-        if (pastAvgOutState.some(isNaN) || pastDoseDataState.some(dose => dose !== null && isNaN(dose))) {
+        // Validate all data before submission.
+        // NaN is a valid sentinel for unobserved week-0 entries; only reject non-finite, non-NaN values (e.g. Infinity).
+        if (pastAvgOutState.some(v => !Number.isNaN(v) && !Number.isFinite(v)) ||
+            pastDoseDataState.some(dose => dose !== null && isNaN(dose))) {
             setValidationError("Please ensure all values are valid numbers");
             return;
         }
@@ -226,23 +269,31 @@ export default function UploadDataForm({ patientID, pastAvgOut, pastDoseData, se
         setSuccess(false);
 
         try {
-            setStatusMessage("Saving observations…");
-            const res = await fetch("/api/results", {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    patientID,
-                    pastAvgOutState,
-                    pastDoseDataState,
-                } satisfies ResultsPutRequest),
-            });
-            if (!res.ok) throw new Error("Failed to save observations");
+            if (isNotebookPatient) {
+                // Notebook patients are frontend-only — no backend DB record exists.
+                // Just propagate the edited data to the parent.
+                if (onDataUpdated) onDataUpdated(pastAvgOutState, pastDoseDataState, undefined, uefmState, wmftState);
+            } else {
+                setStatusMessage("Saving observations…");
+                const res = await fetch("/api/results", {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        patientID,
+                        pastAvgOutState,
+                        pastUefmState: uefmState,
+                        pastWmftState: wmftState,
+                        pastDoseDataState,
+                    } satisfies ResultsPutRequest),
+                });
+                if (!res.ok) throw new Error("Failed to save observations");
 
-            setStatusMessage("Updating model…");
-            const retrainRes = await fetch(`/api/retrain/${patientID}`, { method: "POST" });
-            if (!retrainRes.ok) throw new Error("Failed to update model");
+                setStatusMessage("Updating model…");
+                const retrainRes = await fetch(`/api/retrain/${patientID}`, { method: "POST" });
+                if (!retrainRes.ok) throw new Error("Failed to update model");
 
-            if (onDataUpdated) onDataUpdated(pastAvgOutState, pastDoseDataState);
+                if (onDataUpdated) onDataUpdated(pastAvgOutState, pastDoseDataState, undefined, uefmState, wmftState);
+            }
             setSuccess(true);
             setIsEditing(false);
         } catch {
@@ -366,10 +417,13 @@ export default function UploadDataForm({ patientID, pastAvgOut, pastDoseData, se
                 ) : (
                     <>
                         <div className="overflow-x-auto max-h-96 overflow-y-auto rounded-lg">
-                            <div className="grid grid-cols-4 gap-2 px-2 py-2 bg-gray-50 rounded-t-lg border-b border-gray-200 sticky top-0 z-10">
-                                <div className="font-semibold">Treatment Week</div>
-                                <div className="font-semibold">MAL Score</div>
-                                <div className="font-semibold">Treatment Hours</div>
+                            <div className="grid grid-cols-6 gap-2 px-2 py-2 bg-gray-50 rounded-t-lg border-b border-gray-200 sticky top-0 z-10">
+                                <div className="font-semibold text-sm">Treatment Week</div>
+                                <div className="font-semibold text-sm">MAL Score <span className="font-normal text-gray-400">(0–5)</span></div>
+                                <div className="font-semibold text-sm">UEFM Score <span className="font-normal text-gray-400">(0–66)</span></div>
+                                <div className="font-semibold text-sm">WMFT Score <span className="font-normal text-gray-400">(0–1)</span></div>
+                                <div className="font-semibold text-sm">Treatment Hours</div>
+                                <div></div>
                             </div>
                             <div className="divide-y divide-gray-100">
                                 {pastDoseDataState.map((value, i) => {
@@ -378,24 +432,64 @@ export default function UploadDataForm({ patientID, pastAvgOut, pastDoseData, se
                                     if (outcome == null || !Number.isFinite(Number(outcome))) return null;
                                     return (
                                     <div
-                                        className="grid grid-cols-4 gap-2 px-2 py-3 items-center"
+                                        className="grid grid-cols-6 gap-2 px-2 py-3 items-center"
                                         key={i}
                                         ref={i === pastDoseDataState.length - 1 ? lastRowRef : null}
                                     >
-                                        <div>{i}</div>
+                                        <div className="text-sm">{i}</div>
                                         <div>
                                             {isEditing ? (
                                                 <input
                                                     type="number"
                                                     step="0.1"
+                                                    min="0"
+                                                    max="5"
                                                     value={pastAvgOutState[i]}
                                                     onChange={(e) => updateOutcomeState(i, e.target.value)}
-                                                    className="px-3 py-2 border rounded w-full"
+                                                    className="px-2 py-2 border rounded w-full text-sm"
                                                     required
                                                     aria-label="MAL Score"
                                                 />
                                             ) : (
-                                                <div className="px-3 py-2 bg-gray-50 rounded w-full border border-transparent">{pastAvgOutState[i]}</div>
+                                                <div className="px-2 py-2 bg-gray-50 rounded w-full border border-transparent text-sm">{pastAvgOutState[i]}</div>
+                                            )}
+                                        </div>
+                                        <div>
+                                            {isEditing ? (
+                                                <input
+                                                    type="number"
+                                                    step="0.5"
+                                                    min="0"
+                                                    max="66"
+                                                    value={uefmInputs[i] ?? ""}
+                                                    onChange={(e) => updateUefmState(i, e.target.value)}
+                                                    className="px-2 py-2 border rounded w-full text-sm"
+                                                    placeholder="—"
+                                                    aria-label="UEFM Score"
+                                                />
+                                            ) : (
+                                                <div className="px-2 py-2 bg-gray-50 rounded w-full border border-transparent text-sm">
+                                                    {uefmState[i] != null ? uefmState[i] : <span className="text-gray-400">—</span>}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div>
+                                            {isEditing ? (
+                                                <input
+                                                    type="number"
+                                                    step="0.01"
+                                                    min="0"
+                                                    max="1"
+                                                    value={wmftInputs[i] ?? ""}
+                                                    onChange={(e) => updateWmftState(i, e.target.value)}
+                                                    className="px-2 py-2 border rounded w-full text-sm"
+                                                    placeholder="—"
+                                                    aria-label="WMFT Score"
+                                                />
+                                            ) : (
+                                                <div className="px-2 py-2 bg-gray-50 rounded w-full border border-transparent text-sm">
+                                                    {wmftState[i] != null ? wmftState[i] : <span className="text-gray-400">—</span>}
+                                                </div>
                                             )}
                                         </div>
                                         <div>
@@ -405,12 +499,12 @@ export default function UploadDataForm({ patientID, pastAvgOut, pastDoseData, se
                                                     step="0.5"
                                                     value={pastDoseDataStateInputs[i]}
                                                     onChange={(e) => updateDoseState(i, e.target.value)}
-                                                    className={`px-3 py-2 border rounded w-full ${i === pastDoseDataState.length - 1 ? "bg-gray-200 text-gray-500 cursor-not-allowed" : ""}`}
+                                                    className={`px-2 py-2 border rounded w-full text-sm ${i === pastDoseDataState.length - 1 ? "bg-gray-200 text-gray-500 cursor-not-allowed" : ""}`}
                                                     disabled={i === pastDoseDataState.length - 1}
                                                     aria-label="Treatment Hours"
                                                 />
                                             ) : (
-                                                <div className="px-3 py-2 bg-gray-50 rounded w-full border border-transparent">{pastDoseDataStateInputs[i]}</div>
+                                                <div className="px-2 py-2 bg-gray-50 rounded w-full border border-transparent text-sm">{pastDoseDataStateInputs[i]}</div>
                                             )}
                                         </div>
                                         <div>
